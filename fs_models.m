@@ -55,6 +55,7 @@ variable_pos = [8 10 4 6 14 18:21];
 
 % Another possible script settings. Some script parts does not have to be
 % 100% functional. e.g. posdata and postbl variables might need to be adjusted.
+%
 % variable_name = {'GA' 'Age' 'Height' 'Weight' 'BMI' 'HGB' 'MCV' 'RDW' 'Fe' 'Fer' 'TF' 'satFe' 'TIBC' 'UIBC'};
 % variable_pos = [8 10 4 6:7 14 15 17 18:21];
 % 
@@ -822,19 +823,20 @@ tbl{2,17} = 'SD';
 tbl{3,1} = 'Demographics';
 tbl{4,1} = 'Sex';tbl{4,2} = 'females/%';
 tbl{5,1} = 'GA';tbl{5,2} = 'weeks';
-tbl{6,1} = 'Height';tbl{6,2} = 'percentile';
-tbl{7,1} = 'Weight';tbl{7,2} = 'percentile';
-tbl{8,1} = 'Age at 1st FS';tbl{8,2} = 'months';
-tbl{9,1} = 'Temperature';tbl{9,2} = '°C';
+tbl{6,1} = 'Age';tbl{6,2} = 'months';
+tbl{7,1} = 'Height';tbl{7,2} = 'percentile';
+tbl{8,1} = 'Weight';tbl{8,2} = 'percentile';
+tbl{9,1} = 'Age at 1st FS';tbl{9,2} = 'months';
+tbl{10,1} = 'Temperature';tbl{10,2} = '°C';
 
-tbl{10,1} = 'Iron status';
-tbl{11,1} = 'RBC';tbl{11,2} = '10e06/\muL'; %Ery
-tbl{12,1} = 'HGB';tbl{12,2} = 'g/L';
-tbl{13,1} = 'Fe';tbl{13,2} = '\mumol/L';
-tbl{14,1} = 'Fer';tbl{14,2} = 'ng/mL';
-tbl{15,1} = 'TF';tbl{15,2} = 'g/L';
-tbl{16,1} = 'satFe';tbl{16,2} = ' ';
-tbl{17,1} = 'UIBC';tbl{17,2} = '\mumol/L';
+tbl{11,1} = 'Iron status';
+tbl{12,1} = 'RBC';tbl{12,2} = '10e06/\muL'; %Ery
+tbl{13,1} = 'HGB';tbl{13,2} = 'g/L';
+tbl{14,1} = 'Fe';tbl{14,2} = '\mumol/L';
+tbl{15,1} = 'Fer';tbl{15,2} = 'ng/mL';
+tbl{16,1} = 'TF';tbl{16,2} = 'g/L';
+tbl{17,1} = 'satFe';tbl{17,2} = '%';
+tbl{18,1} = 'UIBC';tbl{18,2} = '\mumol/L';
 
 tbl{3,3} = sum(grp>=3 & firstrecord==1);
 tbl{3,6} = sum((grp==3 | grp==5) & firstrecord==1);
@@ -853,8 +855,8 @@ tbl{4,13} = sum(female==1 & grp==2 & firstrecord==1)*100/sum(grp==2 & firstrecor
 tbl{4,15} = sum(female==1 & grp==1 & firstrecord==1);
 tbl{4,16} = sum(female==1 & grp==1 & firstrecord==1)*100/sum(grp==1 & firstrecord==1);
 
-posdata = [1 3 4 5 6 7 8 9 10]; % Positions in data matrix
-postbl = [5 6 7 12 13 14 15 16 17]; % Positions in table for the smae variables
+posdata = [1 2 3 4 5 6 7 8 9 10]; % Positions in data matrix
+postbl = [5 6 7 8 13 14 15 16 17 18]; % Positions in table for the smae variables
 for ind = 1:size(posdata,2)
     tbl{postbl(ind),3} = nanmedian(data(grp>=3,posdata(ind)));
     tbl{postbl(ind),4} = nanmean(data(grp>=3,posdata(ind)));
@@ -873,41 +875,45 @@ for ind = 1:size(posdata,2)
     tbl{postbl(ind),17} = nanstd(data(grp==1,posdata(ind)));
 end
 
-tbl{8,3} = nanmedian(age1stfs(grp>=3 & firstrecord==1));
-tbl{8,4} = nanmean(age1stfs(grp>=3 & firstrecord==1));
-tbl{8,5} = nanstd(age1stfs(grp>=3 & firstrecord==1));
-tbl{8,6} = nanmedian(age1stfs((grp==3 |grp==5) & firstrecord==1));
-tbl{8,7} = nanmean(age1stfs((grp==3 |grp==5) & firstrecord==1));
-tbl{8,8} = nanstd(age1stfs((grp==3 |grp==5) & firstrecord==1));
-tbl{8,9} = nanmedian(age1stfs(grp==4 & firstrecord==1));
-tbl{8,10} = nanmean(age1stfs(grp==4 & firstrecord==1));
-tbl{8,11} = nanstd(age1stfs(grp==4 & firstrecord==1));
+tbl{9,3} = nanmedian(age1stfs(grp>=3 & firstrecord==1));
+tbl{9,4} = nanmean(age1stfs(grp>=3 & firstrecord==1));
+tbl{9,5} = nanstd(age1stfs(grp>=3 & firstrecord==1));
+tbl{9,6} = nanmedian(age1stfs((grp==3 |grp==5) & firstrecord==1));
+tbl{9,7} = nanmean(age1stfs((grp==3 |grp==5) & firstrecord==1));
+tbl{9,8} = nanstd(age1stfs((grp==3 |grp==5) & firstrecord==1));
+tbl{9,9} = nanmedian(age1stfs(grp==4 & firstrecord==1));
+tbl{9,10} = nanmean(age1stfs(grp==4 & firstrecord==1));
+tbl{9,11} = nanstd(age1stfs(grp==4 & firstrecord==1));
 
-tbl{9,3} = nanmedian(temperature(grp>=3));
-tbl{9,4} = nanmean(temperature(grp>=3));
-tbl{9,5} = nanstd(temperature(grp>=3));
-tbl{9,6} = nanmedian(temperature(grp==3 |grp==5));
-tbl{9,7} = nanmean(temperature(grp==3 |grp==5));
-tbl{9,8} = nanstd(temperature(grp==3 |grp==5));
-tbl{9,9} = nanmedian(temperature(grp==4));
-tbl{9,10} = nanmean(temperature(grp==4));
-tbl{9,11} = nanstd(temperature(grp==4));
+tbl{10,3} = nanmedian(temperature(grp>=3));
+tbl{10,4} = nanmean(temperature(grp>=3));
+tbl{10,5} = nanstd(temperature(grp>=3));
+tbl{10,6} = nanmedian(temperature(grp==3 |grp==5));
+tbl{10,7} = nanmean(temperature(grp==3 |grp==5));
+tbl{10,8} = nanstd(temperature(grp==3 |grp==5));
+tbl{10,9} = nanmedian(temperature(grp==4));
+tbl{10,10} = nanmean(temperature(grp==4));
+tbl{10,11} = nanstd(temperature(grp==4));
 
-tbl{11,3} = nanmedian(rbc(grp>=3));
-tbl{11,4} = nanmean(rbc(grp>=3));
-tbl{11,5} = nanstd(rbc(grp>=3));
-tbl{11,6} = nanmedian(rbc(grp==3 |grp==5));
-tbl{11,7} = nanmean(rbc(grp==3 |grp==5));
-tbl{11,8} = nanstd(rbc(grp==3 |grp==5));
-tbl{11,9} = nanmedian(rbc(grp==4));
-tbl{11,10} = nanmean(rbc(grp==4));
-tbl{11,11} = nanstd(rbc(grp==4));
-tbl{11,12} = nanmedian(rbc(grp==2));
-tbl{11,13} = nanmean(rbc(grp==2));
-tbl{11,14} = nanstd(rbc(grp==2));
-tbl{11,15} = nanmedian(rbc(grp==1));
-tbl{11,16} = nanmean(rbc(grp==1));
-tbl{11,17} = nanstd(rbc(grp==1));
+tbl{12,3} = nanmedian(rbc(grp>=3));
+tbl{12,4} = nanmean(rbc(grp>=3));
+tbl{12,5} = nanstd(rbc(grp>=3));
+tbl{12,6} = nanmedian(rbc(grp==3 |grp==5));
+tbl{12,7} = nanmean(rbc(grp==3 |grp==5));
+tbl{12,8} = nanstd(rbc(grp==3 |grp==5));
+tbl{12,9} = nanmedian(rbc(grp==4));
+tbl{12,10} = nanmean(rbc(grp==4));
+tbl{12,11} = nanstd(rbc(grp==4));
+tbl{12,12} = nanmedian(rbc(grp==2));
+tbl{12,13} = nanmean(rbc(grp==2));
+tbl{12,14} = nanstd(rbc(grp==2));
+tbl{12,15} = nanmedian(rbc(grp==1));
+tbl{12,16} = nanmean(rbc(grp==1));
+tbl{12,17} = nanstd(rbc(grp==1));
+
+for ind = 3:size(tbl,2)
+    tbl{strcmp(tbl(:,1),'satFe'),ind}=tbl{strcmp(tbl(:,1),'satFe'),ind}*100;
+end
 
 %% Analysis of Sex impact on investigated variables in data matrix
 % tblsex cell array consistf of p-values of Wilcoxon-rank sum tests
@@ -966,153 +972,4 @@ for ind = 1:size(data,2)
     [~, tblsex2{ind+1,6}] = ttest2(sx34m,sx34f);
     
     tblsex2{ind+1,1} = variable_name{1,ind};
-end
-
-%% Implemented functions:
-function clr = color_decision(p,thr)
-        if p< thr
-                clr = [0.2 0.7 0.2];
-        elseif p<0.05
-                clr = [0 0 0];
-        else
-                clr=[0.6 0.6 0.6];
-        end
-end
-
-function output = tab_translate(input)
-        if ~ischar(input)
-                output =input;
-        else
-                output = str2double(input);
-        end
-end
-
-function s = estimate_threshold(seiz,nonseiz,variable_name,varID,cmpr_set)
-    patsall = [seiz; nonseiz];
-    perc = 0.01:0.01:1;
-    s = struct([]);
-    if varID == 997
-        s(1,1).name = 'model1';
-    elseif varID == 998
-        s(1,1).name = 'model2';
-    elseif varID == 999
-        s(1,1).name = 'model3';
-    else
-        s(1,1).name = variable_name{1,varID};
-    end
-    for percx = 1:size(perc,2)
-        perc_thr = quantile(patsall, perc(percx));
-        if strcmp(cmpr_set,'le')
-            TP=sum(seiz<=perc_thr);
-            FN=sum(seiz>perc_thr);
-            TN=sum(nonseiz>perc_thr);
-            FP=sum(nonseiz<=perc_thr);
-        elseif strcmp(cmpr_set,'he')
-            TP=sum(seiz>=perc_thr);
-            FN=sum(seiz<perc_thr);
-            TN=sum(nonseiz<perc_thr);
-            FP=sum(nonseiz>=perc_thr);
-        end
-        sensitivity=100*TP/(TP+FN);
-        specificity=100*TN/(TN+FP);
-
-        s(1,1).thr(percx,1) = perc_thr;
-        s(1,1).TP(percx,1) = TP;
-        s(1,1).FN(percx,1) = FN;
-        s(1,1).TN(percx,1) = TN;
-        s(1,1).FP(percx,1) = FP;
-        s(1,1).sensitivity(percx,1) = sensitivity;
-        s(1,1).specificity(percx,1) = specificity;
-        s(1,1).SensSpecSum(percx,1) = 1.00*sensitivity+specificity;     
-    end
-    s(1,1).OptimThrPos = find(s(1,1).SensSpecSum==max(s(1,1).SensSpecSum),1,'first');
-    s(1,1).OptimThr = s(1,1).thr(s(1,1).OptimThrPos,1);
-    s(1,1).OptimSensitivity = s(1,1).sensitivity(s(1,1).OptimThrPos,1);
-    s(1,1).OptimSpecificity = s(1,1).specificity(s(1,1).OptimThrPos,1);
-    s(1,1).min = min(patsall);
-    s(1,1).max = max(patsall);
-end
-
-function plot_cat_scatter(Yp1,Yp2,Yp3_1,Yp3_2,Yp4,YLBL,loc,seiz_risk)
-        Yp3= [Yp3_1; Yp3_2];
-        Yp1_mean = median(Yp1);
-        Yp2_mean = median(Yp2);
-        Yp3_mean = median(Yp3);
-        Yp4_mean = median(Yp4);
-        
-        Yp1_Cinterval = quantile(Yp1,[0.025 0.25 0.50 0.75 0.975]);
-        Yp2_Cinterval = quantile(Yp2,[0.025 0.25 0.50 0.75 0.975]);
-        Yp3_Cinterval = quantile(Yp3,[0.025 0.25 0.50 0.75 0.975]);
-        Yp4_Cinterval = quantile(Yp4,[0.025 0.25 0.50 0.75 0.975]);
-
-        plot([0.27 0.73],[Yp1_Cinterval(2) Yp1_Cinterval(2)],'k','LineWidth',3);
-        hold on
-        if ~isempty(seiz_risk)
-                H3=plot([0 5],[seiz_risk(1,1) seiz_risk(1,1)],':','LineWidth',4,'Color',[0.5 0.5 0.5]);
-        end
-        plot([0.27 0.73],[Yp1_Cinterval(4) Yp1_Cinterval(4)],'k','LineWidth',3);
-        plot([0.27 0.27],[Yp1_Cinterval(2) Yp1_Cinterval(4)],'k','LineWidth',3);
-        plot([0.73 0.73],[Yp1_Cinterval(2) Yp1_Cinterval(4)],'k','LineWidth',3);
-        plot([0.5 0.5],[Yp1_Cinterval(1) Yp1_Cinterval(2)],'k','LineWidth',3);
-        plot([0.48 0.52],[Yp1_Cinterval(1) Yp1_Cinterval(1)],'k','LineWidth',3);
-        plot([0.5 0.5],[Yp1_Cinterval(4) Yp1_Cinterval(5)],'k','LineWidth',3);
-        plot([0.48 0.52],[Yp1_Cinterval(5) Yp1_Cinterval(5)],'k','LineWidth',3);
-        
-        plot([0.77 1.23],[Yp2_Cinterval(2) Yp2_Cinterval(2)],'k','LineWidth',3);
-        plot([0.77 1.23],[Yp2_Cinterval(4) Yp2_Cinterval(4)],'k','LineWidth',3);
-        plot([0.77 0.77],[Yp2_Cinterval(2) Yp2_Cinterval(4)],'k','LineWidth',3);
-        plot([1.23 1.23],[Yp2_Cinterval(2) Yp2_Cinterval(4)],'k','LineWidth',3);
-        plot([1.0 1.0],[Yp2_Cinterval(1) Yp2_Cinterval(2)],'k','LineWidth',3);
-        plot([0.98 1.02],[Yp2_Cinterval(1) Yp2_Cinterval(1)],'k','LineWidth',3);
-        plot([1.0 1.0],[Yp2_Cinterval(4) Yp2_Cinterval(5)],'k','LineWidth',3);
-        plot([0.98 1.02],[Yp2_Cinterval(5) Yp2_Cinterval(5)],'k','LineWidth',3);
-        
-        plot([1.27 1.73],[Yp3_Cinterval(2) Yp3_Cinterval(2)],'k','LineWidth',3);
-        plot([1.27 1.73],[Yp3_Cinterval(4) Yp3_Cinterval(4)],'k','LineWidth',3);
-        plot([1.27 1.27],[Yp3_Cinterval(2) Yp3_Cinterval(4)],'k','LineWidth',3);
-        plot([1.73 1.73],[Yp3_Cinterval(2) Yp3_Cinterval(4)],'k','LineWidth',3);
-        plot([1.5 1.5],[Yp3_Cinterval(1) Yp3_Cinterval(2)],'k','LineWidth',3);
-        plot([1.48 1.52],[Yp3_Cinterval(1) Yp3_Cinterval(1)],'k','LineWidth',3);
-        plot([1.5 1.5],[Yp3_Cinterval(4) Yp3_Cinterval(5)],'k','LineWidth',3);
-        plot([1.48 1.52],[Yp3_Cinterval(5) Yp3_Cinterval(5)],'k','LineWidth',3);
-        
-        plot([1.77 2.23],[Yp4_Cinterval(2) Yp4_Cinterval(2)],'k','LineWidth',3);
-        plot([1.77 2.23],[Yp4_Cinterval(4) Yp4_Cinterval(4)],'k','LineWidth',3);
-        plot([1.77 1.77],[Yp4_Cinterval(2) Yp4_Cinterval(4)],'k','LineWidth',3);
-        plot([2.23 2.23],[Yp4_Cinterval(2) Yp4_Cinterval(4)],'k','LineWidth',3);
-        plot([2.0 2.0],[Yp4_Cinterval(1) Yp4_Cinterval(2)],'k','LineWidth',3);
-        plot([1.98 2.02],[Yp4_Cinterval(1) Yp4_Cinterval(1)],'k','LineWidth',3);
-        plot([2.0 2.0],[Yp4_Cinterval(4) Yp4_Cinterval(5)],'k','LineWidth',3);
-        plot([1.98 2.02],[Yp4_Cinterval(5) Yp4_Cinterval(5)],'k','LineWidth',3);
-        
-        scatter(1*ones(size(Yp1))/2,Yp1,850, 'y.', 'jitter','on', 'jitterAmount', 0.14,'MarkerEdgeAlpha',0.7,'MarkerFaceAlpha',0.7);
-        scatter(2*ones(size(Yp2))/2,Yp2,850, 'g.', 'jitter','on', 'jitterAmount', 0.14,'MarkerEdgeAlpha',0.7,'MarkerFaceAlpha',0.7);
-        scatter(3*ones(size(Yp3_1))/2,Yp3_1,850, 'b.', 'jitter','on', 'jitterAmount', 0.14,'MarkerEdgeAlpha',0.7,'MarkerFaceAlpha',0.7);
-        scatter(3*ones(size(Yp3_2))/2,Yp3_2,100, 'b*', 'jitter','on', 'jitterAmount', 0.14,'MarkerEdgeAlpha',0.7,'MarkerFaceAlpha',0.7,'LineWidth',2);
-        scatter(4*ones(size(Yp4))/2,Yp4,850, 'r.', 'jitter','on', 'jitterAmount', 0.14,'MarkerEdgeAlpha',0.7,'MarkerFaceAlpha',0.7);
-        H1 = plot([0.27 0.73],[Yp1_mean Yp1_mean],'k-.','LineWidth',3);
-        H2 = scatter(-5,Yp3_mean,100,'b*','LineWidth',3);
-        plot([0.77 1.23],[Yp2_mean Yp2_mean],'k-.','LineWidth',3);
-        plot([1.27 1.73],[Yp3_mean Yp3_mean],'k-.','LineWidth',3);
-        plot([1.77 2.23],[Yp4_mean Yp4_mean],'k-.','LineWidth',3);
-        hold off
-        grid on
-        xlim([0.2 2.3])
-        if ~strcmp(loc,' ') && isempty(seiz_risk)
-                legend([H1, H2],{'median value','complex cases'},'location',loc)
-        elseif ~strcmp(loc,' ') && ~isempty(seiz_risk)
-                legend([H1, H2, H3],{'median value','complex cases',['thr=' num2str(seiz_risk(1,1),'%10.2f') ';SE=' num2str(seiz_risk(1,2),'%10.1f') '%;SP=' num2str(seiz_risk(1,3),'%10.1f') '%']},'location',loc)
-        elseif strcmp(loc,' ') && ~isempty(seiz_risk)
-                legend(H3,{['thr=' num2str(seiz_risk(1,1),'%10.2f') ';SE=' num2str(seiz_risk(1,2),'%10.1f') '%;SP=' num2str(seiz_risk(1,3),'%10.1f') '%']},'location','northeast')
-        end
-        ylabel(YLBL)
-        set(gca,'XTick',(1:1:4)/2,...
-                 'XTickLabel',{'healthy controls (1)'
-                               'without seizures (2)' 
-                               'non-recurrent seizures (3)'
-                               'recurrent seizures (4)'
-                               },...
-                 'TickLength',[0 0],'LineWidth',2,...
-                 'FontSize',14)
-        xtickangle(16)
 end
