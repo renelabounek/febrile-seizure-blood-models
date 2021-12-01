@@ -101,10 +101,11 @@ orig_var_num=size(data,2);
 % Calculate UIBC
 data(:,orig_var_num+1)=data(:,FePos)./data(:,satFePos); %Fe/satFe
 data(:,orig_var_num+1) = data(:,orig_var_num+1) - data(:,FePos);
+
 %% Cross-correlation analysis
 clr='ygbrb';
 sym='....*';
-[R, Rpval] = corrplot_rl(data,grp,clr,sym,'VarNames',variable_name,'testR','on','alpha',0.001);
+[R, Rpval] = corrplotg(data,grp,clr,sym,'VarNames',variable_name,'testR','on','alpha',0.001);
 subplot(4,2,4)
 H1=scatter(1,1,1,850,'y.');
 hold on
@@ -118,6 +119,7 @@ set(gca,'FontSize',14)
 axis off
 print(fullfile(save_path,'supplfig-crosscorr'), '-dpng', '-r300')
 pause(0.2)
+
 %% Univariate analysis: Wilcoxon rank-sum tests and two-sample t-tests (between-group tests)
 grp = double(grp);
 
@@ -186,11 +188,14 @@ for vr = 1:size(data,2)
                 pT(vr,8) = NaN;
         end
 end
+
 %% Threshold for Family Wise Error Correction (FWE)
 thrfwe=thr_p_uncorr/(size(pW,1)*size(pW,2));
+
 %% Add sex into analysis
 data = [data female];
 variable_name{1,end+1} = 'Sex';
+
 %% Multivariate analysis: Model3 fitting
 % Prepare X and Y matrices and group variable grp_ps_Wilcox
 ps=ones(size(grp));
