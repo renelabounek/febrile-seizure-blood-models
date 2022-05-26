@@ -898,6 +898,9 @@ tbl{10,8} = nanstd(temperature(grp==3 |grp==5));
 tbl{10,9} = nanmedian(temperature(grp==4));
 tbl{10,10} = nanmean(temperature(grp==4));
 tbl{10,11} = nanstd(temperature(grp==4));
+tbl{10,12} = nanmedian(temperature(grp==2));
+tbl{10,13} = nanmean(temperature(grp==2));
+tbl{10,14} = nanstd(temperature(grp==2));
 
 tbl{12,3} = nanmedian(rbc(grp>=3));
 tbl{12,4} = nanmean(rbc(grp>=3));
