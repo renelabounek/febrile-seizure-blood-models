@@ -35,7 +35,7 @@
 %% Initialize
 clear all; close all; clc;
 %% Define inputs and fixed variables
-save_path='/home/user/figures/fs-results'; %folder where Result figures will be stored.
+save_path='~/figures/fs-results'; %folder where Result figures will be stored.
 xls_file = 'febrile_seizures.xlsx'; % Source xlsx sheet with all available data
 
 fntSiz=11; % Font size
@@ -196,13 +196,17 @@ thrfwe=thr_p_uncorr/(size(pW,1)*size(pW,2));
 %% Add sex into analysis
 data = [data female];
 variable_name{1,end+1} = 'Sex';
+%% Add temperature into Model3 modeling
+data_model3 = [data temperature];
+variable_name_model3=variable_name;
+variable_name_model3{1,end+1} = 'Temp';
 
 %% Multivariate analysis: Model3 fitting
 % Prepare X and Y matrices and group variable grp_ps_Wilcox
 ps=ones(size(grp));
 ps(grp<=2)=0; % zero positions where data of control groups are recorded
 ps = logical(ps); % identify only positions where FS subjects are recorded
-X=data(ps,1:end); % X containing only data of FS subjects
+X=data_model3(ps,1:end); % X containing only data of FS subjects
 Y=AtNum(ps,1); % Y as idex of attack number
 Y_AtOrder = AtOrder(ps,1); % Vector of attack orders
 Y(Y>=2) = 2; % Every non-first attack code as group value equal to 2
@@ -244,7 +248,7 @@ Yp1_Cinterval = quantile(Yp1,[0.025 0.25 0.50 0.75 0.975]);
 Yp2_Cinterval = quantile(Yp2,[0.025 0.25 0.50 0.75 0.975]);
 
 % Model3 sensitivity and specificity analysis
-sts=estimate_threshold(Yp2,Yp1,variable_name,999,'he');idx=idx+1;
+sts=estimate_threshold(Yp2,Yp1,variable_name_model3,999,'he');idx=idx+1;
 S_risk(1,:)=[sts(1,idx-1).OptimThr sts(1,idx-1).OptimSensitivity sts(1,idx-1).OptimSpecificity];
 seiz_risk=[sts(1,idx-1).OptimThr sts(1,idx-1).OptimSensitivity sts(1,idx-1).OptimSpecificity];
 
@@ -252,13 +256,13 @@ seiz_risk=[sts(1,idx-1).OptimThr sts(1,idx-1).OptimSensitivity sts(1,idx-1).Opti
 h(2).fig = figure(2);
 set(h(2).fig,'Position',[50 50 1300 500])
 subplot(1,2,1)
-scatter(data(grp==3,var_sig(1)),data(grp==3,var_sig(2)),850, 'b.')
+scatter(data_model3(grp==3,var_sig(1)),data_model3(grp==3,var_sig(2)),850, 'b.')
 hold on
-scatter(data(grp==5,var_sig(1)),data(grp==5,var_sig(2)),100, 'b*','LineWidth',2)
-scatter(data(grp==4 & AtOrder==1,var_sig(1)),data(grp==4 & AtOrder==1,var_sig(2)),850, 'r.')
-scatter(data(grp==4 & AtOrder>1,var_sig(1)),data(grp==4 & AtOrder>1,var_sig(2)),100, 'r*','LineWidth',2)
-xxdata = [data(grp==3,var_sig(1)); data(grp==4,var_sig(1)); data(grp==5,var_sig(1))];
-yydata = [data(grp==3,var_sig(2)); data(grp==4,var_sig(2)); data(grp==5,var_sig(2))];
+scatter(data_model3(grp==5,var_sig(1)),data_model3(grp==5,var_sig(2)),100, 'b*','LineWidth',2)
+scatter(data_model3(grp==4 & AtOrder==1,var_sig(1)),data_model3(grp==4 & AtOrder==1,var_sig(2)),850, 'r.')
+scatter(data_model3(grp==4 & AtOrder>1,var_sig(1)),data_model3(grp==4 & AtOrder>1,var_sig(2)),100, 'r*','LineWidth',2)
+xxdata = [data_model3(grp==3,var_sig(1)); data_model3(grp==4,var_sig(1)); data_model3(grp==5,var_sig(1))];
+yydata = [data_model3(grp==3,var_sig(2)); data_model3(grp==4,var_sig(2)); data_model3(grp==5,var_sig(2))];
 par = polyfit(xxdata,yydata,1);
 Xlimits = get(gca,'XLim');
 Ylimits = get(gca,'YLim');
@@ -270,8 +274,8 @@ ylim(Ylimits)
 text(35,118,['r=' num2str(rr(1,2),'%10.3f')],'Fontsize',14,'HorizontalAlignment','left')
 hold off
 grid on
-xlabel([variable_name{1,var_sig(1)} ' [%]'])
-ylabel([variable_name{1,var_sig(2)} ' [g/l]'])
+xlabel([variable_name_model3{1,var_sig(1)} ' [%]'])
+ylabel([variable_name_model3{1,var_sig(2)} ' [g/l]'])
 legend('non-recurrent seizures','non-rec. complex seizures','recurrent seizures (1^{st} seizure)','recurrent seizures (repeated seizure)','Location','southeast')
 set(gca,'FontSize',14,...
         'LineWidth',2)
@@ -309,7 +313,7 @@ text(0.75,2.23,'*','FontSize',20,'HorizontalAlignment','center')
 text(0.77,2.2,['p=' num2str(p_Yp_W,'%10.5f')],'FontSize',14,'HorizontalAlignment','left')
 hold off
 grid on
-ylabel([num2str(model3_b(var_sig(1)),'%10.4f') '*' variable_name{1,var_sig(1)} '+' num2str(model3_b(var_sig(2)),'%10.4f') '*' variable_name{1,var_sig(2)}])
+ylabel([num2str(model3_b(var_sig(1)),'%10.4f') '*' variable_name_model3{1,var_sig(1)} '+' num2str(model3_b(var_sig(2)),'%10.4f') '*' variable_name_model3{1,var_sig(2)}])
 ylim([0.6 2.3])
 xlim([0.2 1.3])
 legend([H1, H3],{'median value',['thr=' num2str(seiz_risk(1,1),'%10.2f') ';SE=' num2str(seiz_risk(1,2),'%10.1f') '%;SP=' num2str(seiz_risk(1,3),'%10.1f') '%']},'location','southeast')
