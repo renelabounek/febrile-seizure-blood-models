@@ -84,6 +84,7 @@ patid=zeros(size(raw,1)-2,1);
 firstrecord=zeros(size(raw,1)-2,1);
 rbc=zeros(size(raw,1)-2,1);
 temperature=zeros(size(raw,1)-2,1);
+seize_duration=zeros(size(raw,1)-2,1);
 for ind=1:size(raw,1)-2
         for var = 1:size(variable_pos,2)
                 data(ind,var)=tab_translate(raw{ind+2,variable_pos(1,var)});
@@ -96,6 +97,7 @@ for ind=1:size(raw,1)-2
         firstrecord(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'First record')}); % First record (binary)
         rbc(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'Ery')}); % RBC values
         temperature(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'BT °C')}); % temperature values
+        seize_duration(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'FS duration')}); % Seizure duration
 end
 orig_var_num=size(data,2);
 
@@ -832,15 +834,16 @@ tbl{7,1} = 'Height';tbl{7,2} = 'percentile';
 tbl{8,1} = 'Weight';tbl{8,2} = 'percentile';
 tbl{9,1} = 'Age at 1st FS';tbl{9,2} = 'months';
 tbl{10,1} = 'Temperature';tbl{10,2} = '°C';
+tbl{11,1} = 'FS duration';tbl{11,2} = 'min';
 
-tbl{11,1} = 'Iron status';
-tbl{12,1} = 'RBC';tbl{12,2} = '10e06/\muL'; %Ery
-tbl{13,1} = 'HGB';tbl{13,2} = 'g/L';
-tbl{14,1} = 'Fe';tbl{14,2} = '\mumol/L';
-tbl{15,1} = 'Fer';tbl{15,2} = 'ng/mL';
-tbl{16,1} = 'TF';tbl{16,2} = 'g/L';
-tbl{17,1} = 'satFe';tbl{17,2} = '%';
-tbl{18,1} = 'UIBC';tbl{18,2} = '\mumol/L';
+tbl{12,1} = 'Iron status';
+tbl{13,1} = 'RBC';tbl{13,2} = '10e06/\muL'; %Ery
+tbl{14,1} = 'HGB';tbl{14,2} = 'g/L';
+tbl{15,1} = 'Fe';tbl{15,2} = '\mumol/L';
+tbl{16,1} = 'Fer';tbl{16,2} = 'ng/mL';
+tbl{17,1} = 'TF';tbl{17,2} = 'g/L';
+tbl{18,1} = 'satFe';tbl{18,2} = '%';
+tbl{19,1} = 'UIBC';tbl{19,2} = '\mumol/L';
 
 tbl{3,3} = sum(grp>=3 & firstrecord==1);
 tbl{3,6} = sum((grp==3 | grp==5) & firstrecord==1);
@@ -860,7 +863,7 @@ tbl{4,15} = sum(female==1 & grp==1 & firstrecord==1);
 tbl{4,16} = sum(female==1 & grp==1 & firstrecord==1)*100/sum(grp==1 & firstrecord==1);
 
 posdata = [1 2 3 4 5 6 7 8 9 10]; % Positions in data matrix
-postbl = [5 6 7 8 13 14 15 16 17 18]; % Positions in table for the smae variables
+postbl = [5 6 7 8 14 15 16 17 18 19]; % Positions in table for the smae variables
 for ind = 1:size(posdata,2)
     tbl{postbl(ind),3} = nanmedian(data(grp>=3,posdata(ind)));
     tbl{postbl(ind),4} = nanmean(data(grp>=3,posdata(ind)));
@@ -902,21 +905,32 @@ tbl{10,12} = nanmedian(temperature(grp==2));
 tbl{10,13} = nanmean(temperature(grp==2));
 tbl{10,14} = nanstd(temperature(grp==2));
 
-tbl{12,3} = nanmedian(rbc(grp>=3));
-tbl{12,4} = nanmean(rbc(grp>=3));
-tbl{12,5} = nanstd(rbc(grp>=3));
-tbl{12,6} = nanmedian(rbc(grp==3 |grp==5));
-tbl{12,7} = nanmean(rbc(grp==3 |grp==5));
-tbl{12,8} = nanstd(rbc(grp==3 |grp==5));
-tbl{12,9} = nanmedian(rbc(grp==4));
-tbl{12,10} = nanmean(rbc(grp==4));
-tbl{12,11} = nanstd(rbc(grp==4));
-tbl{12,12} = nanmedian(rbc(grp==2));
-tbl{12,13} = nanmean(rbc(grp==2));
-tbl{12,14} = nanstd(rbc(grp==2));
-tbl{12,15} = nanmedian(rbc(grp==1));
-tbl{12,16} = nanmean(rbc(grp==1));
-tbl{12,17} = nanstd(rbc(grp==1));
+tbl{11,3} = nanmedian(seize_duration(grp>=3));
+tbl{11,4} = nanmean(seize_duration(grp>=3));
+tbl{11,5} = nanstd(seize_duration(grp>=3));
+tbl{11,6} = nanmedian(seize_duration(grp==3 |grp==5));
+tbl{11,7} = nanmean(seize_duration(grp==3 |grp==5));
+tbl{11,8} = nanstd(seize_duration(grp==3 |grp==5));
+tbl{11,9} = nanmedian(seize_duration(grp==4));
+tbl{11,10} = nanmean(seize_duration(grp==4));
+tbl{11,11} = nanstd(seize_duration(grp==4));
+
+tbl{13,3} = nanmedian(rbc(grp>=3));
+tbl{13,4} = nanmean(rbc(grp>=3));
+tbl{13,5} = nanstd(rbc(grp>=3));
+tbl{13,6} = nanmedian(rbc(grp==3 |grp==5));
+tbl{13,7} = nanmean(rbc(grp==3 |grp==5));
+tbl{13,8} = nanstd(rbc(grp==3 |grp==5));
+tbl{13,9} = nanmedian(rbc(grp==4));
+tbl{13,10} = nanmean(rbc(grp==4));
+tbl{13,11} = nanstd(rbc(grp==4));
+tbl{13,12} = nanmedian(rbc(grp==2));
+tbl{13,13} = nanmean(rbc(grp==2));
+tbl{13,14} = nanstd(rbc(grp==2));
+tbl{13,15} = nanmedian(rbc(grp==1));
+tbl{13,16} = nanmean(rbc(grp==1));
+tbl{13,17} = nanstd(rbc(grp==1));
+
 
 for ind = 3:size(tbl,2)
     tbl{strcmp(tbl(:,1),'satFe'),ind}=tbl{strcmp(tbl(:,1),'satFe'),ind}*100;
