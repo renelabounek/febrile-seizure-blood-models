@@ -15,11 +15,11 @@
 
 ## Please, cite as:
 
-Papez Jan, Labounek Rene, Jabandziev Petr, Ceska Katarina, Slaba Katerina, Oslejskova Hana, Aulicka Stefania, Nestrasil Igor. Predictive multivariate linear mixture models of febrile seizure risk and recurrency: a prospective case-control study. Developmental Medicine & Child Neurology (2022) [Under Review] 
+Papez Jan, Labounek Rene, Jabandziev Petr, Ceska Katarina, Slaba Katerina, Oslejskova Hana, Aulicka Stefania, Nestrasil Igor (2023). Multivariate models for the prediction of febrile seizure risk and recurrence: a prospective case-control study. 
 
 ## Copyright
 
-Copyright 2020-2022 Rene Labounek (1,*), Igor Nestrasil (1)
+Copyright 2020-2023 Rene Labounek (1,*), Igor Nestrasil (1)
 
 (1) Division of clinical Behavioral Neuroscience, Department of Pediatrics, Masonic Institute for the Developing Brain, University of Minnesota, Minneapolis, MN, USA\
 (*) email: rlaboune@umn.edu
