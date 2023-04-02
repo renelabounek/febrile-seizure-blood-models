@@ -15,7 +15,7 @@
 
 ## Please, cite as:
 
-Papez Jan, Labounek Rene, Jabandziev Petr, Ceska Katarina, Slaba Katerina, Oslejskova Hana, Aulicka Stefania, Nestrasil Igor (2023). Multivariate models for the prediction of febrile seizure risk and recurrence: a prospective case-control study. 
+[Papez Jan, Labounek Rene, Jabandziev Petr, Ceska Katarina, Slaba Katerina, Oslejskova Hana, Aulicka Stefania, Nestrasil Igor (2023). Multivariate models for the prediction of febrile seizure risk and recurrence: a prospective case-control study](https://assets.researchsquare.com/files/rs-2606721/v1/c6362c7b-60d6-460f-8ad1-e79fcc6ef23b.pdf?c=1677167779)
 
 ## Copyright
 
