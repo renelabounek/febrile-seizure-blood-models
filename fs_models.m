@@ -35,7 +35,7 @@
 %% Initialize
 clear all; close all; clc;
 %% Define inputs and fixed variables
-save_path='/home/user/figures/fs-results'; %folder where Result figures will be stored.
+save_path='~/figures/fs-results'; %folder where Result figures will be stored.
 xls_file = 'febrile_seizures.xlsx'; % Source xlsx sheet with all available data
 
 fntSiz=11; % Font size
@@ -84,6 +84,7 @@ patid=zeros(size(raw,1)-2,1);
 firstrecord=zeros(size(raw,1)-2,1);
 rbc=zeros(size(raw,1)-2,1);
 temperature=zeros(size(raw,1)-2,1);
+seize_duration=zeros(size(raw,1)-2,1);
 for ind=1:size(raw,1)-2
         for var = 1:size(variable_pos,2)
                 data(ind,var)=tab_translate(raw{ind+2,variable_pos(1,var)});
@@ -96,6 +97,7 @@ for ind=1:size(raw,1)-2
         firstrecord(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'First record')}); % First record (binary)
         rbc(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'Ery')}); % RBC values
         temperature(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'BT °C')}); % temperature values
+        seize_duration(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'FS duration')}); % Seizure duration
 end
 orig_var_num=size(data,2);
 
@@ -196,13 +198,17 @@ thrfwe=thr_p_uncorr/(size(pW,1)*size(pW,2));
 %% Add sex into analysis
 data = [data female];
 variable_name{1,end+1} = 'Sex';
+%% Add temperature into Model3 modeling
+data_model3 = [data temperature];
+variable_name_model3=variable_name;
+variable_name_model3{1,end+1} = 'Temp';
 
 %% Multivariate analysis: Model3 fitting
 % Prepare X and Y matrices and group variable grp_ps_Wilcox
 ps=ones(size(grp));
 ps(grp<=2)=0; % zero positions where data of control groups are recorded
 ps = logical(ps); % identify only positions where FS subjects are recorded
-X=data(ps,1:end); % X containing only data of FS subjects
+X=data_model3(ps,1:end); % X containing only data of FS subjects
 Y=AtNum(ps,1); % Y as idex of attack number
 Y_AtOrder = AtOrder(ps,1); % Vector of attack orders
 Y(Y>=2) = 2; % Every non-first attack code as group value equal to 2
@@ -244,7 +250,7 @@ Yp1_Cinterval = quantile(Yp1,[0.025 0.25 0.50 0.75 0.975]);
 Yp2_Cinterval = quantile(Yp2,[0.025 0.25 0.50 0.75 0.975]);
 
 % Model3 sensitivity and specificity analysis
-sts=estimate_threshold(Yp2,Yp1,variable_name,999,'he');idx=idx+1;
+sts=estimate_threshold(Yp2,Yp1,variable_name_model3,999,'he');idx=idx+1;
 S_risk(1,:)=[sts(1,idx-1).OptimThr sts(1,idx-1).OptimSensitivity sts(1,idx-1).OptimSpecificity];
 seiz_risk=[sts(1,idx-1).OptimThr sts(1,idx-1).OptimSensitivity sts(1,idx-1).OptimSpecificity];
 
@@ -252,13 +258,13 @@ seiz_risk=[sts(1,idx-1).OptimThr sts(1,idx-1).OptimSensitivity sts(1,idx-1).Opti
 h(2).fig = figure(2);
 set(h(2).fig,'Position',[50 50 1300 500])
 subplot(1,2,1)
-scatter(data(grp==3,var_sig(1)),data(grp==3,var_sig(2)),850, 'b.')
+scatter(data_model3(grp==3,var_sig(1)),data_model3(grp==3,var_sig(2)),850, 'b.')
 hold on
-scatter(data(grp==5,var_sig(1)),data(grp==5,var_sig(2)),100, 'b*','LineWidth',2)
-scatter(data(grp==4 & AtOrder==1,var_sig(1)),data(grp==4 & AtOrder==1,var_sig(2)),850, 'r.')
-scatter(data(grp==4 & AtOrder>1,var_sig(1)),data(grp==4 & AtOrder>1,var_sig(2)),100, 'r*','LineWidth',2)
-xxdata = [data(grp==3,var_sig(1)); data(grp==4,var_sig(1)); data(grp==5,var_sig(1))];
-yydata = [data(grp==3,var_sig(2)); data(grp==4,var_sig(2)); data(grp==5,var_sig(2))];
+scatter(data_model3(grp==5,var_sig(1)),data_model3(grp==5,var_sig(2)),100, 'b*','LineWidth',2)
+scatter(data_model3(grp==4 & AtOrder==1,var_sig(1)),data_model3(grp==4 & AtOrder==1,var_sig(2)),850, 'r.')
+scatter(data_model3(grp==4 & AtOrder>1,var_sig(1)),data_model3(grp==4 & AtOrder>1,var_sig(2)),100, 'r*','LineWidth',2)
+xxdata = [data_model3(grp==3,var_sig(1)); data_model3(grp==4,var_sig(1)); data_model3(grp==5,var_sig(1))];
+yydata = [data_model3(grp==3,var_sig(2)); data_model3(grp==4,var_sig(2)); data_model3(grp==5,var_sig(2))];
 par = polyfit(xxdata,yydata,1);
 Xlimits = get(gca,'XLim');
 Ylimits = get(gca,'YLim');
@@ -270,8 +276,8 @@ ylim(Ylimits)
 text(35,118,['r=' num2str(rr(1,2),'%10.3f')],'Fontsize',14,'HorizontalAlignment','left')
 hold off
 grid on
-xlabel([variable_name{1,var_sig(1)} ' [%]'])
-ylabel([variable_name{1,var_sig(2)} ' [g/l]'])
+xlabel([variable_name_model3{1,var_sig(1)} ' [%]'])
+ylabel([variable_name_model3{1,var_sig(2)} ' [g/l]'])
 legend('non-recurrent seizures','non-rec. complex seizures','recurrent seizures (1^{st} seizure)','recurrent seizures (repeated seizure)','Location','southeast')
 set(gca,'FontSize',14,...
         'LineWidth',2)
@@ -309,7 +315,7 @@ text(0.75,2.23,'*','FontSize',20,'HorizontalAlignment','center')
 text(0.77,2.2,['p=' num2str(p_Yp_W,'%10.5f')],'FontSize',14,'HorizontalAlignment','left')
 hold off
 grid on
-ylabel([num2str(model3_b(var_sig(1)),'%10.4f') '*' variable_name{1,var_sig(1)} '+' num2str(model3_b(var_sig(2)),'%10.4f') '*' variable_name{1,var_sig(2)}])
+ylabel([num2str(model3_b(var_sig(1)),'%10.4f') '*' variable_name_model3{1,var_sig(1)} '+' num2str(model3_b(var_sig(2)),'%10.4f') '*' variable_name_model3{1,var_sig(2)}])
 ylim([0.6 2.3])
 xlim([0.2 1.3])
 legend([H1, H3],{'median value',['thr=' num2str(seiz_risk(1,1),'%10.2f') ';SE=' num2str(seiz_risk(1,2),'%10.1f') '%;SP=' num2str(seiz_risk(1,3),'%10.1f') '%']},'location','southeast')
@@ -828,15 +834,16 @@ tbl{7,1} = 'Height';tbl{7,2} = 'percentile';
 tbl{8,1} = 'Weight';tbl{8,2} = 'percentile';
 tbl{9,1} = 'Age at 1st FS';tbl{9,2} = 'months';
 tbl{10,1} = 'Temperature';tbl{10,2} = '°C';
+tbl{11,1} = 'FS duration';tbl{11,2} = 'min';
 
-tbl{11,1} = 'Iron status';
-tbl{12,1} = 'RBC';tbl{12,2} = '10e06/\muL'; %Ery
-tbl{13,1} = 'HGB';tbl{13,2} = 'g/L';
-tbl{14,1} = 'Fe';tbl{14,2} = '\mumol/L';
-tbl{15,1} = 'Fer';tbl{15,2} = 'ng/mL';
-tbl{16,1} = 'TF';tbl{16,2} = 'g/L';
-tbl{17,1} = 'satFe';tbl{17,2} = '%';
-tbl{18,1} = 'UIBC';tbl{18,2} = '\mumol/L';
+tbl{12,1} = 'Iron status';
+tbl{13,1} = 'RBC';tbl{13,2} = '10e06/\muL'; %Ery
+tbl{14,1} = 'HGB';tbl{14,2} = 'g/L';
+tbl{15,1} = 'Fe';tbl{15,2} = '\mumol/L';
+tbl{16,1} = 'Fer';tbl{16,2} = 'ng/mL';
+tbl{17,1} = 'TF';tbl{17,2} = 'g/L';
+tbl{18,1} = 'satFe';tbl{18,2} = '%';
+tbl{19,1} = 'UIBC';tbl{19,2} = '\mumol/L';
 
 tbl{3,3} = sum(grp>=3 & firstrecord==1);
 tbl{3,6} = sum((grp==3 | grp==5) & firstrecord==1);
@@ -856,7 +863,7 @@ tbl{4,15} = sum(female==1 & grp==1 & firstrecord==1);
 tbl{4,16} = sum(female==1 & grp==1 & firstrecord==1)*100/sum(grp==1 & firstrecord==1);
 
 posdata = [1 2 3 4 5 6 7 8 9 10]; % Positions in data matrix
-postbl = [5 6 7 8 13 14 15 16 17 18]; % Positions in table for the smae variables
+postbl = [5 6 7 8 14 15 16 17 18 19]; % Positions in table for the smae variables
 for ind = 1:size(posdata,2)
     tbl{postbl(ind),3} = nanmedian(data(grp>=3,posdata(ind)));
     tbl{postbl(ind),4} = nanmean(data(grp>=3,posdata(ind)));
@@ -894,22 +901,36 @@ tbl{10,8} = nanstd(temperature(grp==3 |grp==5));
 tbl{10,9} = nanmedian(temperature(grp==4));
 tbl{10,10} = nanmean(temperature(grp==4));
 tbl{10,11} = nanstd(temperature(grp==4));
+tbl{10,12} = nanmedian(temperature(grp==2));
+tbl{10,13} = nanmean(temperature(grp==2));
+tbl{10,14} = nanstd(temperature(grp==2));
 
-tbl{12,3} = nanmedian(rbc(grp>=3));
-tbl{12,4} = nanmean(rbc(grp>=3));
-tbl{12,5} = nanstd(rbc(grp>=3));
-tbl{12,6} = nanmedian(rbc(grp==3 |grp==5));
-tbl{12,7} = nanmean(rbc(grp==3 |grp==5));
-tbl{12,8} = nanstd(rbc(grp==3 |grp==5));
-tbl{12,9} = nanmedian(rbc(grp==4));
-tbl{12,10} = nanmean(rbc(grp==4));
-tbl{12,11} = nanstd(rbc(grp==4));
-tbl{12,12} = nanmedian(rbc(grp==2));
-tbl{12,13} = nanmean(rbc(grp==2));
-tbl{12,14} = nanstd(rbc(grp==2));
-tbl{12,15} = nanmedian(rbc(grp==1));
-tbl{12,16} = nanmean(rbc(grp==1));
-tbl{12,17} = nanstd(rbc(grp==1));
+tbl{11,3} = nanmedian(seize_duration(grp>=3));
+tbl{11,4} = nanmean(seize_duration(grp>=3));
+tbl{11,5} = nanstd(seize_duration(grp>=3));
+tbl{11,6} = nanmedian(seize_duration(grp==3 |grp==5));
+tbl{11,7} = nanmean(seize_duration(grp==3 |grp==5));
+tbl{11,8} = nanstd(seize_duration(grp==3 |grp==5));
+tbl{11,9} = nanmedian(seize_duration(grp==4));
+tbl{11,10} = nanmean(seize_duration(grp==4));
+tbl{11,11} = nanstd(seize_duration(grp==4));
+
+tbl{13,3} = nanmedian(rbc(grp>=3));
+tbl{13,4} = nanmean(rbc(grp>=3));
+tbl{13,5} = nanstd(rbc(grp>=3));
+tbl{13,6} = nanmedian(rbc(grp==3 |grp==5));
+tbl{13,7} = nanmean(rbc(grp==3 |grp==5));
+tbl{13,8} = nanstd(rbc(grp==3 |grp==5));
+tbl{13,9} = nanmedian(rbc(grp==4));
+tbl{13,10} = nanmean(rbc(grp==4));
+tbl{13,11} = nanstd(rbc(grp==4));
+tbl{13,12} = nanmedian(rbc(grp==2));
+tbl{13,13} = nanmean(rbc(grp==2));
+tbl{13,14} = nanstd(rbc(grp==2));
+tbl{13,15} = nanmedian(rbc(grp==1));
+tbl{13,16} = nanmean(rbc(grp==1));
+tbl{13,17} = nanstd(rbc(grp==1));
+
 
 for ind = 3:size(tbl,2)
     tbl{strcmp(tbl(:,1),'satFe'),ind}=tbl{strcmp(tbl(:,1),'satFe'),ind}*100;
