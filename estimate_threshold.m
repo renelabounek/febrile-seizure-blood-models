@@ -60,7 +60,11 @@ function s = estimate_threshold(seiz,nonseiz,variable_name,varID,cmpr_set)
         s(1,1).FP(percx,1) = FP;
         s(1,1).sensitivity(percx,1) = sensitivity;
         s(1,1).specificity(percx,1) = specificity;
-        s(1,1).SensSpecSum(percx,1) = 1.00*sensitivity+specificity;     
+        if sensitivity>50 && specificity>50
+            s(1,1).SensSpecSum(percx,1) = 1.00*sensitivity+specificity;
+        else
+            s(1,1).SensSpecSum(percx,1) = 0;
+        end
     end
     s(1,1).OptimThrPos = find(s(1,1).SensSpecSum==max(s(1,1).SensSpecSum),1,'first');
     s(1,1).OptimThr = s(1,1).thr(s(1,1).OptimThrPos,1);

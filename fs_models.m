@@ -17,7 +17,7 @@
 % mixture models of febrile seizure risk and recurrency: a prospective case-control study. Developmental Medicine & Child Neurology (2022) [Under Review] 
 %
 % =====================================================================================================================================================================
-% Copyright 2020-2022 Rene Labounek (1,*), Igor Nestrasil (1)
+% Copyright 2020-2023 Rene Labounek (1,*), Igor Nestrasil (1)
 %
 % (1) Division of clinical Behavioral Neuroscience, Department of Pediatrics, Masonic Institute for the Developing Brain, University of Minnesota, Minneapolis, MN, USA
 % (*) email: rlaboune@umn.edu
@@ -34,14 +34,16 @@
 
 %% Initialize
 clear all; close all; clc;
+%make results reproducible by resetting the random number generator:
+rng('default');
 %% Define inputs and fixed variables
 save_path='~/figures/fs-results'; %folder where Result figures will be stored.
 xls_file = 'febrile_seizures.xlsx'; % Source xlsx sheet with all available data
 
 fntSiz=11; % Font size
 thr_p_uncorr = 0.05; % uncorrected critical p-value; normalized at FWE corrected p-value within the code
-fig6xmax=1.32;
-fig6ymax=1;
+fig6xmax=1.4;
+fig6ymax=0.9;
 fig6xmin_zoom=0.48;
 
 
@@ -49,6 +51,14 @@ fig6xmin_zoom=0.48;
 cols = size(raw,2);
 
 idx=1;
+
+niter_adasyn = 1000;
+m1=struct([]);
+m2=struct([]);
+m3=struct([]);
+M1=struct([]);
+M2=struct([]);
+M3=struct([]);
 %% Analysis variables and value extraction
 variable_name = {'GA' 'Age' 'Height' 'Weight' 'HGB' 'Fe' 'Fer' 'TF' 'satFe' 'UIBC'};
 variable_pos = [8 10 4 6 14 18:21];
@@ -223,24 +233,97 @@ X(nodata==1,:)=[]; % only X values where all data are recorded
 % X = ( X - repmat(mean(X),size(X,1),1) ) ./ (  repmat(std(X),size(X,1),1) );
 % Y = (Y - mean(Y)) / std(Y);
 
-% Step-wise linear regression for model3
-[model3_b,model3_se,model3_pval,model3_inmodel,model3_stats,model3_nextstep,model3_history] =stepwisefit(X,Y,'penter',0.05);
-% Predicted signal Y_predict
-Y_predict = sum( repmat(model3_b(model3_inmodel==1)',size(X,1),1).*X(:,model3_inmodel==1) ,2); % Predicted signal for record where all data were acquired
-[model3_r, model3_pr]=corrcoef(Y,Y_predict);
-model3_R2 = (1 - model3_stats(1,1).SSresid / model3_stats(1,1).SStotal)*100;
- 
-var_sig=find(model3_inmodel==1);
+% ADASYN model3
+% ADASYN sythetic dataset matchin female sample size with male sample size
+% ADASYN: set up ADASYN parameters an d call the function:
 
-Yp=sum(X_Wilcox(:,var_sig).*repmat(model3_b(var_sig)',size(X_Wilcox,1),1),2); % Predicted signal for all FS subjects
+features1f = X(Y==1 & X(:,end-1)==1,[1:end-2 end]);
+features1m = X(Y==1 & X(:,end-1)==0,[1:end-2 end]);
+labels1f = true([size(features1f,1) 1]);
+labels1m = false([size(features1m,1) 1]);
+
+features2f = X(Y==2 & X(:,end-1)==1,[1:end-2 end]);
+features2m = X(Y==2 & X(:,end-1)==0,[1:end-2 end]);
+labels2f = true([size(features2f,1) 1]);
+labels2m = false([size(features2m,1) 1]);
+
+adasyn_features1                 = [features1f; features1m];
+adasyn_labels1                   = [labels1f  ; labels1m  ];
+adasyn_beta1                     = [];   %let ADASYN choose default
+adasyn_kDensity1                 = [];   %let ADASYN choose default
+adasyn_kSMOTE1                   = [];   %let ADASYN choose default
+adasyn_featuresAreNormalized1    = false;    %false lets ADASYN handle normalization
+
+adasyn_features2                 = [features2f; features2m];
+adasyn_labels2                   = [labels2f  ; labels2m  ];
+adasyn_beta2                     = [];   %let ADASYN choose default
+adasyn_kDensity2                 = [];   %let ADASYN choose default
+adasyn_kSMOTE2                   = [];   %let ADASYN choose default
+adasyn_featuresAreNormalized2    = false;    %false lets ADASYN handle normalization
+
+for iter = 1:niter_adasyn
+    % ADASYN
+    [adasyn_featuresSyn1, adasyn_labelsSyn1] = ADASYN(adasyn_features1, adasyn_labels1, adasyn_beta1, adasyn_kDensity1, adasyn_kSMOTE1, adasyn_featuresAreNormalized1);
+    [adasyn_featuresSyn2, adasyn_labelsSyn2] = ADASYN(adasyn_features2, adasyn_labels2, adasyn_beta2, adasyn_kDensity2, adasyn_kSMOTE2, adasyn_featuresAreNormalized2);
+    
+    XSyn = [X; ...
+        [adasyn_featuresSyn1(:,1:end-1), adasyn_labelsSyn1, adasyn_featuresSyn1(:,end)]; ...
+        [adasyn_featuresSyn2(:,1:end-1), adasyn_labelsSyn2, adasyn_featuresSyn2(:,end)] ];
+    YSyn = [Y; ones(size(adasyn_labelsSyn1)); 2*ones(size(adasyn_labelsSyn2))];
+
+    % Step-wise linear regression for model3
+    [m3(iter,1).b,m3(iter,1).se,m3(iter,1).pval,m3(iter,1).inmodel,m3(iter,1).stats,m3(iter,1).nextstep,m3(iter,1).history] = stepwisefit(XSyn,YSyn,'penter',0.05);
+    Y_predict = sum( repmat(m3(iter,1).b(m3(iter,1).inmodel==1)',size(X,1),1).*X(:,m3(iter,1).inmodel==1) ,2); % Predicted signal Y_predict
+    [r, pr]=corrcoef(Y,Y_predict);
+    m3(iter,1).Y_predict = Y_predict;
+    m3(iter,1).r = r(1,2);
+    m3(iter,1).p_r = pr(1,2);
+    m3(iter,1).R2 = (1 - m3(iter,1).stats(1,1).SSresid / m3(iter,1).stats(1,1).SStotal)*100;
+end
+
+M3(1,1).inmodel = reshape([m3(:,1).inmodel]',size(m3(1,1).inmodel,2),niter_adasyn)';
+M3(1,1).inmodel_unique = unique(M3.inmodel,'rows');
+M3(1,1).inmodel_unique_prob = zeros(size(M3.inmodel_unique,1),1);
+
+for res = 1:size(M3.inmodel_unique,1)
+    for iter = 1:niter_adasyn
+        M3.inmodel_unique_prob(res,1) = M3.inmodel_unique_prob(res,1) + ...
+            double(sum(M3.inmodel_unique(res,:) == M3.inmodel(iter,:)) == size(m3(1,1).inmodel,2));
+    end
+end
+M3(1,1).inmodel_unique_prob = 100*M3.inmodel_unique_prob/niter_adasyn;
+M3(1,1).best = find(M3.inmodel_unique_prob==max(M3.inmodel_unique_prob));
+M3(1,1).pos = sum(M3.inmodel == M3.inmodel_unique(M3.best,:),2) == size(M3.inmodel,2);
+M3(1,1).varid = find(M3.inmodel_unique(M3.best,:)==1);
+b = [m3.b]';
+b = b(M3.pos,M3.varid);
+M3.b(:,1) =  mean(b);
+M3.b(:,2) =  std(b);
+pval = [m3.pval]';
+pval = pval(M3.pos,M3.varid);
+M3.pval = median(pval);
+r = [m3(M3.pos,1).r]';
+M3.r = [mean(r) std(r)];
+M3.p_r = median([m3(M3.pos,1).p_r]);
+R2 = [m3(M3.pos,1).R2]';
+M3.R2 = [mean(R2) std(R2)];
+
+% Predicted signal Y_predict
+% Y_predict = sum( repmat(M3.b(:,1)',size(X,1),1).*X(:,M3.varid) ,2); % Predicted signal for record where all data were acquired
+% [model3_r, model3_pr]=corrcoef(Y,Y_predict);
+% model3_R2 = (1 - model3_stats(1,1).SSresid / model3_stats(1,1).SStotal)*100;
+ 
+var_sig=M3.varid;
+
+Yp=sum(X_Wilcox(:,M3.varid).*repmat(M3.b(:,1)',size(X_Wilcox,1),1),2); % Predicted signal for all FS subjects
 p_Yp_W = ranksum(Yp(Y_Wilcox==1),Yp(Y_Wilcox==2)); % Wilcoxon rank-sum test
 [~, p_Yp_T] = ttest2(Yp(Y_Wilcox==1),Yp(Y_Wilcox==2)); % Two-sample t-test
 
 % Sub-grouping of the predicted signal for visualization purposes 
 Yp1=Yp(Y_Wilcox==1);
 Yp2=Yp(Y_Wilcox==2);
-Yp1_mean = median(Yp1);
-Yp2_mean = median(Yp2);
+Yp1_mean = median(Yp1,'omitnan');
+Yp2_mean = median(Yp2,'omitnan');
 Yp1_1=Yp(grp_ps_Wilcox==3);
 Yp1_2=Yp(grp_ps_Wilcox==5);
 Yp2_1=Yp(Y_Wilcox==2 & Y_AtOrder==1);
@@ -258,26 +341,29 @@ seiz_risk=[sts(1,idx-1).OptimThr sts(1,idx-1).OptimSensitivity sts(1,idx-1).Opti
 h(2).fig = figure(2);
 set(h(2).fig,'Position',[50 50 1300 500])
 subplot(1,2,1)
-scatter(data_model3(grp==3,var_sig(1)),data_model3(grp==3,var_sig(2)),850, 'b.')
+scatter3(data_model3(grp==3,var_sig(1)),data_model3(grp==3,var_sig(2)),data_model3(grp==3,var_sig(3)),850, 'b.')
 hold on
-scatter(data_model3(grp==5,var_sig(1)),data_model3(grp==5,var_sig(2)),100, 'b*','LineWidth',2)
-scatter(data_model3(grp==4 & AtOrder==1,var_sig(1)),data_model3(grp==4 & AtOrder==1,var_sig(2)),850, 'r.')
-scatter(data_model3(grp==4 & AtOrder>1,var_sig(1)),data_model3(grp==4 & AtOrder>1,var_sig(2)),100, 'r*','LineWidth',2)
-xxdata = [data_model3(grp==3,var_sig(1)); data_model3(grp==4,var_sig(1)); data_model3(grp==5,var_sig(1))];
-yydata = [data_model3(grp==3,var_sig(2)); data_model3(grp==4,var_sig(2)); data_model3(grp==5,var_sig(2))];
-par = polyfit(xxdata,yydata,1);
+scatter3(data_model3(grp==5,var_sig(1)),data_model3(grp==5,var_sig(2)),data_model3(grp==5,var_sig(3)),100, 'b*','LineWidth',2)
+scatter3(data_model3(grp==4 & AtOrder==1,var_sig(1)),data_model3(grp==4 & AtOrder==1,var_sig(2)),data_model3(grp==4 & AtOrder==1,var_sig(3)),850, 'r.')
+scatter3(data_model3(grp==4 & AtOrder>1,var_sig(1)),data_model3(grp==4 & AtOrder>1,var_sig(2)),data_model3(grp==4 & AtOrder>1,var_sig(3)),100, 'r*','LineWidth',2)
+% xxdata = [data_model3(grp==3,var_sig(1)); data_model3(grp==4,var_sig(1)); data_model3(grp==5,var_sig(1))];
+% yydata = [data_model3(grp==3,var_sig(2)); data_model3(grp==4,var_sig(2)); data_model3(grp==5,var_sig(2))];
+% par = polyfit(xxdata,yydata,1);
 Xlimits = get(gca,'XLim');
 Ylimits = get(gca,'YLim');
-Yvals = par(1).*Xlimits + par(2);
-rr = corrcoef(xxdata,yydata);
-plot(Xlimits,Yvals,'-.','LineWidth',2,'Color',[80 80 80]/255)
+Zlimits = get(gca,'ZLim');
+% Yvals = par(1).*Xlimits + par(2);
+% rr = corrcoef(xxdata,yydata);
+% plot(Xlimits,Yvals,'-.','LineWidth',2,'Color',[80 80 80]/255)
 xlim(Xlimits)
 ylim(Ylimits)
-text(35,118,['r=' num2str(rr(1,2),'%10.3f')],'Fontsize',14,'HorizontalAlignment','left')
+zlim(Zlimits)
+% text(35,118,['r=' num2str(rr(1,2),'%10.3f')],'Fontsize',14,'HorizontalAlignment','left')
 hold off
 grid on
 xlabel([variable_name_model3{1,var_sig(1)} ' [%]'])
 ylabel([variable_name_model3{1,var_sig(2)} ' [g/l]'])
+zlabel(variable_name_model3{1,var_sig(3)})
 legend('non-recurrent seizures','non-rec. complex seizures','recurrent seizures (1^{st} seizure)','recurrent seizures (repeated seizure)','Location','southeast')
 set(gca,'FontSize',14,...
         'LineWidth',2)
@@ -307,15 +393,15 @@ scatter(1*ones(size(Yp1_1))/2,Yp1_1,850, 'b.', 'jitter','on', 'jitterAmount', 0.
 scatter(1*ones(size(Yp1_2))/2,Yp1_2,100, 'b*', 'jitter','on', 'jitterAmount', 0.14,'MarkerEdgeAlpha',0.7,'MarkerFaceAlpha',0.7,'LineWidth',2);
 scatter(2*ones(size(Yp2_1))/2,Yp2_1,850, '.','MarkerEdgeColor',[1 0 0], 'jitter','on', 'jitterAmount', 0.14,'MarkerEdgeAlpha',0.7,'MarkerFaceAlpha',0.7);
 scatter(2*ones(size(Yp2_2))/2,Yp2_2,100, 'r*', 'jitter','on', 'jitterAmount', 0.14,'MarkerEdgeAlpha',0.7,'MarkerFaceAlpha',0.7,'LineWidth',2);
-plot([0.5 1],[2.10 2.10],'k-.','LineWidth',2)
-plot([0.5 0.5],[2.02 2.10],'k-.','LineWidth',2)
-plot([1 1],[2.02 2.10],'k-.','LineWidth',2)
-plot([0.75 0.75],[2.10 2.18],'k-.','LineWidth',2)
+plot([0.5 1],[2.14 2.14],'k-.','LineWidth',2)
+plot([0.5 0.5],[2.08 2.14],'k-.','LineWidth',2)
+plot([1 1],[2.08 2.14],'k-.','LineWidth',2)
+plot([0.75 0.75],[2.14 2.20],'k-.','LineWidth',2)
 text(0.75,2.23,'*','FontSize',20,'HorizontalAlignment','center')
 text(0.77,2.2,['p=' num2str(p_Yp_W,'%10.5f')],'FontSize',14,'HorizontalAlignment','left')
 hold off
 grid on
-ylabel([num2str(model3_b(var_sig(1)),'%10.4f') '*' variable_name_model3{1,var_sig(1)} '+' num2str(model3_b(var_sig(2)),'%10.4f') '*' variable_name_model3{1,var_sig(2)}])
+ylabel({[num2str(M3.b(1,1),'%10.4f') '*' variable_name_model3{1,var_sig(1)} '+' num2str(M3.b(2,1),'%10.4f') '*' variable_name_model3{1,var_sig(2)}]; ['+' num2str(M3.b(3,1),'%10.4f') '*' variable_name_model3{1,var_sig(3)} ]} )
 ylim([0.6 2.3])
 xlim([0.2 1.3])
 legend([H1, H3],{'median value',['thr=' num2str(seiz_risk(1,1),'%10.2f') ';SE=' num2str(seiz_risk(1,2),'%10.1f') '%;SP=' num2str(seiz_risk(1,3),'%10.1f') '%']},'location','southeast')
@@ -343,17 +429,78 @@ X(:,satFePos) = randn(size(X,1),1); % Substitute satFe data with Gausian random 
 % worse specificity. Exlusion satFe from analysis improves model1 specificity.
 % You can comment the previous command line and make the experiment yourself.
 
+% ADASYN model1
+% ADASYN sythetic dataset matchin female sample size with male sample size
+% ADASYN: set up ADASYN parameters and call the function:
+
+featuresf = X(Y==2 & X(:,end)==1,1:end-1);
+featuresm = X(Y==2 & X(:,end)==0,1:end-1);
+labelsf = true([size(featuresf,1) 1]);
+labelsm = false([size(featuresm,1) 1]);
+
+adasyn_features                 = [featuresf; featuresm];
+adasyn_labels                   = [labelsf  ; labelsm  ];
+adasyn_beta                     = [];   %let ADASYN choose default
+adasyn_kDensity                 = [];   %let ADASYN choose default
+adasyn_kSMOTE                   = [];   %let ADASYN choose default
+adasyn_featuresAreNormalized    = false;    %false lets ADASYN handle normalization
+
+for iter = 1:niter_adasyn
+    % ADASYN
+    [adasyn_featuresSyn, adasyn_labelsSyn] = ADASYN(adasyn_features, adasyn_labels, adasyn_beta, adasyn_kDensity, adasyn_kSMOTE, adasyn_featuresAreNormalized);
+    
+    XSyn = [X; [adasyn_featuresSyn, adasyn_labelsSyn]];
+    YSyn = [Y; 2*ones(size(adasyn_labelsSyn))];
+
+    % Step-wise linear regression for model1
+    [m1(iter,1).b,m1(iter,1).se,m1(iter,1).pval,m1(iter,1).inmodel,m1(iter,1).stats,m1(iter,1).nextstep,m1(iter,1).history] = stepwisefit(XSyn,YSyn,'penter',0.05);
+    Y_predict = sum( repmat(m1(iter,1).b(m1(iter,1).inmodel==1)',size(X,1),1).*X(:,m1(iter,1).inmodel==1) ,2); % Predicted signal Y_predict
+    [r, pr]=corrcoef(Y,Y_predict);
+    m1(iter,1).Y_predict = Y_predict;
+    m1(iter,1).r = r(1,2);
+    m1(iter,1).p_r = pr(1,2);
+    m1(iter,1).R2 = (1 - m1(iter,1).stats(1,1).SSresid / m1(iter,1).stats(1,1).SStotal)*100;
+end
+
+M1(1,1).inmodel = reshape([m1(:,1).inmodel]',size(m1(1,1).inmodel,2),niter_adasyn)';
+M1(1,1).inmodel_unique = unique(M1.inmodel,'rows');
+M1(1,1).inmodel_unique_prob = zeros(size(M1.inmodel_unique,1),1);
+
+for res = 1:size(M1.inmodel_unique,1)
+    for iter = 1:niter_adasyn
+        M1.inmodel_unique_prob(res,1) = M1.inmodel_unique_prob(res,1) + ...
+            double(sum(M1.inmodel_unique(res,:) == M1.inmodel(iter,:)) == size(m1(1,1).inmodel,2));
+    end
+end
+M1(1,1).inmodel_unique_prob = 100*M1.inmodel_unique_prob/niter_adasyn;
+M1(1,1).best = find(M1.inmodel_unique_prob==max(M1.inmodel_unique_prob));
+M1(1,1).pos = sum(M1.inmodel == M1.inmodel_unique(M1.best,:),2) == size(M1.inmodel,2);
+M1(1,1).varid = find(M1.inmodel_unique(M1.best,:)==1);
+b = [m1.b]';
+b = b(M1.pos,M1.varid);
+M1.b(:,1) =  mean(b);
+M1.b(:,2) =  std(b);
+pval = [m1.pval]';
+pval = pval(M1.pos,M1.varid);
+M1.pval = median(pval);
+r = [m1(M1.pos,1).r]';
+M1.r = [mean(r) std(r)];
+M1.p_r = median([m1(M1.pos,1).p_r]);
+R2 = [m1(M1.pos,1).R2]';
+M1.R2 = [mean(R2) std(R2)];
+
 % Step-wise linear regression for model1
-[model1_b,model1_se,model1_pval,model1_inmodel,model1_stats,model1_nextstep,model1_history] =stepwisefit(X,Y,'penter',0.05);
-Y_predict = sum( repmat(model1_b(model1_inmodel==1)',size(X,1),1).*X(:,model1_inmodel==1) ,2); % Predicted signal Y_predict
+% [model1_b,model1_se,model1_pval,model1_inmodel,model1_stats,model1_nextstep,model1_history] =stepwisefit(X,Y,'penter',0.05);
+Y_predict = sum( repmat(M1.b(:,1)',size(X,1),1).*X(:,M1.varid) ,2); % Predicted signal Y_predict
 Predicted = Y_predict; % Store predicted signal for further analysis
-[model1_r, model1_pr]=corrcoef(Y,Y_predict);
-model1_R2 = (1 - model1_stats(1,1).SSresid / model1_stats(1,1).SStotal)*100;
+% [model1_r, model1_pr]=corrcoef(Y,Y_predict);
+% model1_R2 = (1 - model1_stats(1,1).SSresid / model1_stats(1,1).SStotal)*100;
 
 % Sorted variables based on variable significance to the model
-var_sig=find(model1_inmodel==1);
-[~,I] = sort(model1_pval(var_sig));
+var_sig=M1.varid;
+[~,I] = sort(M1.pval);
 var_sig=var_sig(I);
+model1_b = M1.b(I);
 
 % Sub-grouping of the predicted signal for betweem-group testings and for visualization purposes 
 Yp1=Y_predict(grp_ps==1);
@@ -420,17 +567,17 @@ set(gca,'FontSize',14,...
 
 subplot(1,2,2)
 if size(var_sig,2)<3
-    YLBL1=[num2str(model1_b(var_sig(1)),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
-             '+' num2str(model1_b(var_sig(2)),'%10.3f') '*' variable_name{1,var_sig(2)}];
+    YLBL1=[num2str(model1_b(1),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
+             '+' num2str(model1_b(2),'%10.3f') '*' variable_name{1,var_sig(2)}];
 elseif size(var_sig,2)==3
-    YLBL1=[num2str(model1_b(var_sig(1)),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
-            '+' num2str(model1_b(var_sig(2)),'%10.3f') '*' variable_name{1,var_sig(2)}...
-            num2str(model1_b(var_sig(3)),'%10.3f') '*' variable_name{1,var_sig(3)} ];
+    YLBL1=[num2str(model1_b(1),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
+            '+' num2str(model1_b(2),'%10.3f') '*' variable_name{1,var_sig(2)}...
+            num2str(model1_b(3),'%10.3f') '*' variable_name{1,var_sig(3)} ];
 else
-    YLBL1={[num2str(model1_b(var_sig(1)),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
-            '+' num2str(model1_b(var_sig(2)),'%10.3f') '*' variable_name{1,var_sig(2)}],...
-            ['+' num2str(model1_b(var_sig(3)),'%10.3f') '*' variable_name{1,var_sig(3)} ...
-            '+' num2str(model1_b(var_sig(4)),'%10.3f') '*' variable_name{1,var_sig(4)} ]};
+    YLBL1={[num2str(model1_b(1),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
+            '+' num2str(model1_b(2),'%10.3f') '*' variable_name{1,var_sig(2)}],...
+            ['+' num2str(model1_b(3),'%10.3f') '*' variable_name{1,var_sig(3)} ...
+            '+' num2str(model1_b(4),'%10.3f') '*' variable_name{1,var_sig(4)} ]};
 end
 plot_cat_scatter(Yp1,Yp2,Yp3_1,Yp3_2,Yp4,YLBL1,'southeast',S_risk(1,:))
 
@@ -550,7 +697,6 @@ axis off
 
 print(fullfile(save_path,'fig1'), '-dpng', '-r300')
 pause(0.2)
-
 %% Multivariate analysis: Model2 fitting
 ps=~isnan(sum(data,2)); % Positions where all data are recorded
 X=data(ps,1:end); % Matrix X of all recorded data
@@ -566,17 +712,79 @@ grp_ps2(grp_ps==1)=[]; % Group categories on positions where all data are record
 X(Y==0,:)=[]; % Matrix X of all recorded data without data of afebrille healthy controls
 Y(Y==0)=[]; Y=Y-1; % Y signal without afebrille healthy controls
 
+
+% ADASYN model2
+% ADASYN sythetic dataset matchin female sample size with male sample size
+% ADASYN: set up ADASYN parameters and call the function:
+
+featuresf = X(Y==1 & X(:,end)==1,1:end-1);
+featuresm = X(Y==1 & X(:,end)==0,1:end-1);
+labelsf = true([size(featuresf,1) 1]);
+labelsm = false([size(featuresm,1) 1]);
+
+adasyn_features                 = [featuresf; featuresm];
+adasyn_labels                   = [labelsf  ; labelsm  ];
+adasyn_beta                     = [];   %let ADASYN choose default
+adasyn_kDensity                 = [];   %let ADASYN choose default
+adasyn_kSMOTE                   = [];   %let ADASYN choose default
+adasyn_featuresAreNormalized    = false;    %false lets ADASYN handle normalization
+
+for iter = 1:niter_adasyn
+    % ADASYN
+    [adasyn_featuresSyn, adasyn_labelsSyn] = ADASYN(adasyn_features, adasyn_labels, adasyn_beta, adasyn_kDensity, adasyn_kSMOTE, adasyn_featuresAreNormalized);
+
+    XSyn = [X; [adasyn_featuresSyn, adasyn_labelsSyn]];
+    YSyn = [Y; ones(size(adasyn_labelsSyn))];
+
+    % Step-wise linear regression for model2
+    [m2(iter,1).b,m2(iter,1).se,m2(iter,1).pval,m2(iter,1).inmodel,m2(iter,1).stats,m2(iter,1).nextstep,m2(iter,1).history] = stepwisefit(XSyn,YSyn,'penter',0.05);
+    Y_predict = sum( repmat(m2(iter,1).b(m2(iter,1).inmodel==1)',size(X,1),1).*X(:,m2(iter,1).inmodel==1) ,2); % Predicted signal Y_predict
+    [r, pr]=corrcoef(Y,Y_predict);
+    m2(iter,1).Y_predict = Y_predict;
+    m2(iter,1).r = r(1,2);
+    m2(iter,1).p_r = pr(1,2);
+    m2(iter,1).R2 = (1 - m2(iter,1).stats(1,1).SSresid / m2(iter,1).stats(1,1).SStotal)*100;
+end
+
+M2(1,1).inmodel = reshape([m2(:,1).inmodel]',size(m2(1,1).inmodel,2),niter_adasyn)';
+M2(1,1).inmodel_unique = unique(M2.inmodel,'rows');
+M2(1,1).inmodel_unique_prob = zeros(size(M2.inmodel_unique,1),1);
+
+for res = 1:size(M2.inmodel_unique,1)
+    for iter = 1:niter_adasyn
+        M2.inmodel_unique_prob(res,1) = M2.inmodel_unique_prob(res,1) + ...
+            double(sum(M2.inmodel_unique(res,:) == M2.inmodel(iter,:)) == size(m2(1,1).inmodel,2));
+    end
+end
+M2(1,1).inmodel_unique_prob = 100*M2.inmodel_unique_prob/niter_adasyn;
+M2(1,1).best = find(M2.inmodel_unique_prob==max(M2.inmodel_unique_prob));
+M2(1,1).pos = sum(M2.inmodel == M2.inmodel_unique(M2.best,:),2) == size(M2.inmodel,2);
+M2(1,1).varid = find(M2.inmodel_unique(M2.best,:)==1);
+b = [m2.b]';
+b = b(M2.pos,M2.varid);
+M2.b(:,1) =  mean(b);
+M2.b(:,2) =  std(b);
+pval = [m2.pval]';
+pval = pval(M2.pos,M2.varid);
+M2.pval = median(pval);
+r = [m2(M2.pos,1).r]';
+M2.r = [mean(r) std(r)];
+M2.p_r = median([m2(M2.pos,1).p_r]);
+R2 = [m2(M2.pos,1).R2]';
+M2.R2 = [mean(R2) std(R2)];
+
 % Step-wise linear regression for model2
-[model2_b,model2_se,model2_pval,model2_inmodel,model2_stats,model2_nextstep,model2_history] =stepwisefit(X,Y,'penter',0.05);
-Y_predict = sum( repmat(model2_b(model2_inmodel==1)',size(X2,1),1).*X2(:,model2_inmodel==1) ,2);
+% [model2_b,model2_se,model2_pval,model2_inmodel,model2_stats,model2_nextstep,model2_history] =stepwisefit(X,Y,'penter',0.05);
+Y_predict = sum( repmat(M2.b(:,1)',size(X2,1),1).*X2(:,M2.varid) ,2);
 Predicted(:,2) = Y_predict;
-[model2_r, model2_pr]=corrcoef(Y,Y_predict(grp_ps~=1));
-model2_R2 = (1 - model2_stats(1,1).SSresid / model2_stats(1,1).SStotal)*100;
+% [model2_r, model2_pr]=corrcoef(Y,Y_predict(grp_ps~=1));
+% model2_R2 = (1 - model2_stats(1,1).SSresid / model2_stats(1,1).SStotal)*100;
 
 % Sorted variables based on variable significance to the model
-var_sig=find(model2_inmodel==1);
-[~,I] = sort(model2_pval(var_sig));
+var_sig=M2.varid;
+[~,I] = sort(M2.pval);
 var_sig=var_sig(I);
+model2_b = M2.b(I);
 
 % Sub-grouping of the predicted signal for betweem-group testings and for visualization purposes 
 Yp1=Y_predict(grp_ps==1);
@@ -616,30 +824,30 @@ S_risk(2,:)=[sts(1,idx-1).OptimThr sts(1,idx-1).OptimSensitivity sts(1,idx-1).Op
 h(5).fig = figure(5);
 set(h(5).fig,'Position',[50 50 1300 500])
 subplot(5,2,[1 3 5 7])
-scatter3(data(grp==2,var_sig(1)),data(grp==2,var_sig(2)),data(grp==2,var_sig(3)),850, 'g.')
+scatter3(data(grp==2,var_sig(1)),data(grp==2,var_sig(3)),data(grp==2,var_sig(2)),850, 'g.')
 hold on
-scatter3(data(grp==1,var_sig(1)),data(grp==1,var_sig(2)),data(grp==1,var_sig(3)),850, 'y.')
-scatter3(data(grp==3,var_sig(1)),data(grp==3,var_sig(2)),data(grp==3,var_sig(3)),850, 'b.')
-scatter3(data(grp==5,var_sig(1)),data(grp==5,var_sig(2)),data(grp==5,var_sig(3)),100, 'b*','LineWidth',2)
-scatter3(data(grp==4,var_sig(1)),data(grp==4,var_sig(2)),data(grp==4,var_sig(3)),850, 'r.')
+scatter3(data(grp==1,var_sig(1)),data(grp==1,var_sig(3)),data(grp==1,var_sig(2)),850, 'y.')
+scatter3(data(grp==3,var_sig(1)),data(grp==3,var_sig(3)),data(grp==3,var_sig(2)),850, 'b.')
+scatter3(data(grp==5,var_sig(1)),data(grp==5,var_sig(3)),data(grp==5,var_sig(2)),100, 'b*','LineWidth',2)
+scatter3(data(grp==4,var_sig(1)),data(grp==4,var_sig(3)),data(grp==4,var_sig(2)),850, 'r.')
 hold off
 grid on
 xlabel(variable_name{1,var_sig(1)})
-ylabel([variable_name{1,var_sig(2)} ' [\mumol/l]'])
-zlabel([variable_name{1,var_sig(3)} ' [%]'])
+ylabel([variable_name{1,var_sig(3)} ' [\mumol/l]'])
+zlabel([variable_name{1,var_sig(2)} ' [%]'])
 set(gca,'FontSize',14,...
         'LineWidth',2)
 
 subplot(1,2,2)
 if size(var_sig,2)==3
-    YLBL2=[num2str(model2_b(var_sig(1)),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
-            num2str(model2_b(var_sig(2)),'%10.3f') '*' variable_name{1,var_sig(2)}...
-            '+' num2str(model2_b(var_sig(3)),'%10.3f') '*' variable_name{1,var_sig(3)} ];
+    YLBL2=[num2str(model2_b(1),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
+            num2str(model2_b(2),'%10.3f') '*' variable_name{1,var_sig(2)}...
+            '+' num2str(model2_b(3),'%10.3f') '*' variable_name{1,var_sig(3)} ];
 else
-    YLBL2={[num2str(model2_b(var_sig(1)),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
-        '+' num2str(model2_b(var_sig(2)),'%10.3f') '*' variable_name{1,var_sig(2)}] ...
-        ['+' num2str(model2_b(var_sig(3)),'%10.3f') '*' variable_name{1,var_sig(3)} ...
-        num2str(model2_b(var_sig(4)),'%10.3f') '*' variable_name{1,var_sig(4)} ]};
+    YLBL2={[num2str(model2_b(1),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
+        '+' num2str(model2_b(2),'%10.3f') '*' variable_name{1,var_sig(2)}] ...
+        ['+' num2str(model2_b(3),'%10.3f') '*' variable_name{1,var_sig(3)} ...
+        num2str(model2_b(4),'%10.3f') '*' variable_name{1,var_sig(4)} ]};
 end
 plot_cat_scatter(Yp1,Yp2,Yp3_1,Yp3_2,Yp4,YLBL2,'southeast',S_risk(2,:))
 
@@ -733,7 +941,7 @@ H2=scatter(Predicted(grp_ps==2,1),Predicted(grp_ps==2,2),850, 'g.','MarkerEdgeAl
 H3=scatter(Predicted(grp_ps==3,1),Predicted(grp_ps==3,2),850, 'b.','MarkerEdgeAlpha',0.5);
 H4=scatter(Predicted(grp_ps==5,1),Predicted(grp_ps==5,2),100, 'b*','MarkerEdgeAlpha',0.5,'LineWidth',2);
 H5=scatter(Predicted(grp_ps==4,1),Predicted(grp_ps==4,2),850, 'r.','MarkerEdgeAlpha',0.5);
-H7=plot([-1000 -1000],[-1000 -1000],'c-.','LineWidth',2);
+% H7=plot([-1000 -1000],[-1000 -1000],'c-.','LineWidth',2);
 hold off
 grid on
 axis([ 1.02*min(Predicted(:,1)) fig6xmax 1.1*min(Predicted(:,2)) fig6ymax ])
@@ -753,8 +961,8 @@ scatter(Predicted(grp_ps==2,1),Predicted(grp_ps==2,2),850, 'g.','MarkerEdgeAlpha
 scatter(Predicted(grp_ps==3,1),Predicted(grp_ps==3,2),850, 'b.','MarkerEdgeAlpha',0.5)
 scatter(Predicted(grp_ps==5,1),Predicted(grp_ps==5,2),100, 'b*','MarkerEdgeAlpha',0.5,'LineWidth',2)
 scatter(Predicted(grp_ps==4,1),Predicted(grp_ps==4,2),850, 'r.','MarkerEdgeAlpha',0.5)
-text(0.7,0.18,'Bi-linear classifier:','FontSize',12)
-text(0.7,0.13,['SE=' num2str(S_risk(3,2),'%10.1f') '%; SP=' num2str(S_risk(3,3),'%10.1f') '%'],'FontSize',12)
+text(0.75,0.18,'Bi-linear classifier:','FontSize',12)
+text(0.75,0.13,['SE=' num2str(S_risk(3,2),'%10.1f') '%; SP=' num2str(S_risk(3,3),'%10.1f') '%'],'FontSize',12)
 hold off
 grid on
 axis([ fig6xmin_zoom fig6xmax 0 fig6ymax ])
