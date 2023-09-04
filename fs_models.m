@@ -14,10 +14,10 @@
 % Please, cite as:
 % 
 % Papez Jan, Labounek Rene, Jabandziev Petr, Ceska Katarina, Slaba Katerina, Oslejskova Hana, Aulicka Stefania, Nestrasil Igor. Predictive multivariate linear
-% mixture models of febrile seizure risk and recurrency: a prospective case-control study. Developmental Medicine & Child Neurology (2022) [Under Review] 
+% mixture models of febrile seizure risk and recurrency: a prospective case-control study. Scientific Reports (2023) [Under Review] 
 %
 % =====================================================================================================================================================================
-% Copyright 2020-2022 Rene Labounek (1,*), Igor Nestrasil (1)
+% Copyright 2020-2023 Rene Labounek (1,*), Igor Nestrasil (1)
 %
 % (1) Division of clinical Behavioral Neuroscience, Department of Pediatrics, Masonic Institute for the Developing Brain, University of Minnesota, Minneapolis, MN, USA
 % (*) email: rlaboune@umn.edu
@@ -34,14 +34,16 @@
 
 %% Initialize
 clear all; close all; clc;
+%make results reproducible by resetting the random number generator:
+rng('default');
 %% Define inputs and fixed variables
 save_path='~/figures/fs-results'; %folder where Result figures will be stored.
 xls_file = 'febrile_seizures.xlsx'; % Source xlsx sheet with all available data
 
 fntSiz=11; % Font size
 thr_p_uncorr = 0.05; % uncorrected critical p-value; normalized at FWE corrected p-value within the code
-fig6xmax=1.32;
-fig6ymax=1;
+fig6xmax=1.4;
+fig6ymax=0.9;
 fig6xmin_zoom=0.48;
 
 
@@ -49,6 +51,30 @@ fig6xmin_zoom=0.48;
 cols = size(raw,2);
 
 idx=1;
+
+niter_adasyn = 5000;
+m1=struct([]);
+m2=struct([]);
+m3=struct([]);
+M1=struct([]);
+M2=struct([]);
+M3=struct([]);
+
+m190=struct([]);
+m180=struct([]);
+m170=struct([]);
+m160=struct([]);
+m150=struct([]);
+m290=struct([]);
+m280=struct([]);
+m270=struct([]);
+m260=struct([]);
+m250=struct([]);
+m390=struct([]);
+m380=struct([]);
+m370=struct([]);
+m360=struct([]);
+m350=struct([]);
 %% Analysis variables and value extraction
 variable_name = {'GA' 'Age' 'Height' 'Weight' 'HGB' 'Fe' 'Fer' 'TF' 'satFe' 'UIBC'};
 variable_pos = [8 10 4 6 14 18:21];
@@ -84,6 +110,9 @@ patid=zeros(size(raw,1)-2,1);
 firstrecord=zeros(size(raw,1)-2,1);
 rbc=zeros(size(raw,1)-2,1);
 temperature=zeros(size(raw,1)-2,1);
+mch=zeros(size(raw,1)-2,1);
+vitD=zeros(size(raw,1)-2,1);
+sodium=zeros(size(raw,1)-2,1);
 seize_duration=zeros(size(raw,1)-2,1);
 for ind=1:size(raw,1)-2
         for var = 1:size(variable_pos,2)
@@ -97,6 +126,9 @@ for ind=1:size(raw,1)-2
         firstrecord(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'First record')}); % First record (binary)
         rbc(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'Ery')}); % RBC values
         temperature(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'BT °C')}); % temperature values
+        mch(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'MCH')}); % MCH values
+        vitD(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'vit.D')}); % vitamin D values
+        sodium(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'sodium')}); % sodium values
         seize_duration(ind,1) = tab_translate(raw{ind+2,strcmp(raw(1,:),'FS duration')}); % Seizure duration
 end
 orig_var_num=size(data,2);
@@ -195,13 +227,29 @@ end
 %% Threshold for Family Wise Error Correction (FWE)
 thrfwe=thr_p_uncorr/(size(pW,1)*size(pW,2));
 
+%% Test difference between FS and RFS groups in electrolytes and vitD
+fsdata = [mch sodium vitD];
+rfsdata = fsdata(grp == 4 & AtOrder > 1,:);
+fsdata = fsdata(grp == 4 & AtOrder == 1,:);
+
+fsdata_stat = zeros(size(fsdata,2),3);
+rfsdata_stat = zeros(size(fsdata,2),3);
+pfsW = 5*ones(size(fsdata,2),1);
+for vr = 1:size(fsdata,2)
+    [pfsW(vr,1), ~] = ranksum(fsdata(:,vr),rfsdata(:,vr));
+    fsdata_stat(vr,:) = quantile(fsdata(:,vr),[0.15 0.5 0.85]);
+    rfsdata_stat(vr,:) = quantile(rfsdata(:,vr),[0.15 0.5 0.85]);
+end
 %% Add sex into analysis
 data = [data female];
 variable_name{1,end+1} = 'Sex';
-%% Add temperature into Model3 modeling
-data_model3 = [data temperature];
+%% Add temperature, MCH, vitD and sodium into Model3 modeling
+data_model3 = [data temperature mch vitD sodium];
 variable_name_model3=variable_name;
 variable_name_model3{1,end+1} = 'Temp';
+variable_name_model3{1,end+1} = 'MCH';
+variable_name_model3{1,end+1} = 'vitD';
+variable_name_model3{1,end+1} = 'Sodium';
 
 %% Multivariate analysis: Model3 fitting
 % Prepare X and Y matrices and group variable grp_ps_Wilcox
@@ -223,24 +271,146 @@ X(nodata==1,:)=[]; % only X values where all data are recorded
 % X = ( X - repmat(mean(X),size(X,1),1) ) ./ (  repmat(std(X),size(X,1),1) );
 % Y = (Y - mean(Y)) / std(Y);
 
-% Step-wise linear regression for model3
-[model3_b,model3_se,model3_pval,model3_inmodel,model3_stats,model3_nextstep,model3_history] =stepwisefit(X,Y,'penter',0.05);
-% Predicted signal Y_predict
-Y_predict = sum( repmat(model3_b(model3_inmodel==1)',size(X,1),1).*X(:,model3_inmodel==1) ,2); % Predicted signal for record where all data were acquired
-[model3_r, model3_pr]=corrcoef(Y,Y_predict);
-model3_R2 = (1 - model3_stats(1,1).SSresid / model3_stats(1,1).SStotal)*100;
- 
-var_sig=find(model3_inmodel==1);
+% ADASYN model3 (Sci Rep revision 1: Q2 of R1)
+% ADASYN sythetic dataset matchin female sample size with male sample size
+% ADASYN: set up ADASYN parameters an d call the function:
 
-Yp=sum(X_Wilcox(:,var_sig).*repmat(model3_b(var_sig)',size(X_Wilcox,1),1),2); % Predicted signal for all FS subjects
+features1f = X(Y==1 & X(:,end-4)==1,[1:end-5 end-3:end]);
+features1m = X(Y==1 & X(:,end-4)==0,[1:end-5 end-3:end]);
+labels1f = true([size(features1f,1) 1]);
+labels1m = false([size(features1m,1) 1]);
+
+features2f = X(Y==2 & X(:,end-4)==1,[1:end-5 end-3:end]);
+features2m = X(Y==2 & X(:,end-4)==0,[1:end-5 end-3:end]);
+labels2f = true([size(features2f,1) 1]);
+labels2m = false([size(features2m,1) 1]);
+
+adasyn_features1                 = [features1f; features1m];
+adasyn_labels1                   = [labels1f  ; labels1m  ];
+adasyn_beta1                     = [];   %let ADASYN choose default
+adasyn_kDensity1                 = [];   %let ADASYN choose default
+adasyn_kSMOTE1                   = [];   %let ADASYN choose default
+adasyn_featuresAreNormalized1    = false;    %false lets ADASYN handle normalization
+
+adasyn_features2                 = [features2f; features2m];
+adasyn_labels2                   = [labels2f  ; labels2m  ];
+adasyn_beta2                     = [];   %let ADASYN choose default
+adasyn_kDensity2                 = [];   %let ADASYN choose default
+adasyn_kSMOTE2                   = [];   %let ADASYN choose default
+adasyn_featuresAreNormalized2    = false;    %false lets ADASYN handle normalization
+
+
+% Divide data regarding groups and sex for dataset undersampling and
+% testing regression parameter stability (Sci Rep revision 1: Q2 of R2 and Q1 of R1)
+XX0f = X(Y==1 & X(:,end-4)==1,:);
+XX0m = X(Y==1 & X(:,end-4)==0,:);
+XX1f = X(Y==2 & X(:,end-4)==1,:);
+XX1m = X(Y==2 & X(:,end-4)==0,:);
+sizeXX0f = size(XX0f,1); sizeXX0f90 = round(0.9*sizeXX0f);  sizeXX0f80 = round(0.8*sizeXX0f);  sizeXX0f70 = round(0.7*sizeXX0f);  sizeXX0f60 = round(0.6*sizeXX0f);  sizeXX0f50 = round(0.5*sizeXX0f);
+sizeXX0m = size(XX0m,1); sizeXX0m90 = round(0.9*sizeXX0m);  sizeXX0m80 = round(0.8*sizeXX0m);  sizeXX0m70 = round(0.7*sizeXX0m);  sizeXX0m60 = round(0.6*sizeXX0m);  sizeXX0m50 = round(0.5*sizeXX0m);
+sizeXX1f = size(XX1f,1); sizeXX1f90 = round(0.9*sizeXX1f);  sizeXX1f80 = round(0.8*sizeXX1f);  sizeXX1f70 = round(0.7*sizeXX1f);  sizeXX1f60 = round(0.6*sizeXX1f);  sizeXX1f50 = round(0.5*sizeXX1f);
+sizeXX1m = size(XX1m,1); sizeXX1m90 = round(0.9*sizeXX1m);  sizeXX1m80 = round(0.8*sizeXX1m);  sizeXX1m70 = round(0.7*sizeXX1m);  sizeXX1m60 = round(0.6*sizeXX1m);  sizeXX1m50 = round(0.5*sizeXX1m);
+
+for iter = 1:niter_adasyn
+    % ADASYN (Sci Rep revision 1: Q2 of R1)
+    [adasyn_featuresSyn1, adasyn_labelsSyn1] = ADASYN(adasyn_features1, adasyn_labels1, adasyn_beta1, adasyn_kDensity1, adasyn_kSMOTE1, adasyn_featuresAreNormalized1);
+    [adasyn_featuresSyn2, adasyn_labelsSyn2] = ADASYN(adasyn_features2, adasyn_labels2, adasyn_beta2, adasyn_kDensity2, adasyn_kSMOTE2, adasyn_featuresAreNormalized2);
+    
+    XSyn = [X; ...
+        [adasyn_featuresSyn1(:,1:end-4), adasyn_labelsSyn1, adasyn_featuresSyn1(:,end-3:end)]; ...
+        [adasyn_featuresSyn2(:,1:end-4), adasyn_labelsSyn2, adasyn_featuresSyn2(:,end-3:end)] ];
+    YSyn = [Y; ones(size(adasyn_labelsSyn1)); 2*ones(size(adasyn_labelsSyn2))];
+
+    % Step-wise linear regression for model3
+    [m3(iter,1).b,m3(iter,1).se,m3(iter,1).pval,m3(iter,1).inmodel,m3(iter,1).stats,m3(iter,1).nextstep,m3(iter,1).history] = stepwisefit(XSyn,YSyn,'penter',0.05);
+    Y_predict = sum( repmat(m3(iter,1).b(m3(iter,1).inmodel==1)',size(X,1),1).*X(:,m3(iter,1).inmodel==1) ,2); % Predicted signal Y_predict
+    [r, pr]=corrcoef(Y,Y_predict);
+    m3(iter,1).Y_predict = Y_predict;
+    m3(iter,1).r = r(1,2);
+    m3(iter,1).p_r = pr(1,2);
+    m3(iter,1).R2 = (1 - m3(iter,1).stats(1,1).SSresid / m3(iter,1).stats(1,1).SStotal)*100;
+    tmp=estimate_threshold(Y_predict(Y==2),Y_predict(Y==1),variable_name_model3,999,'he');
+    m3(iter,1).threshold = tmp.OptimThr;
+    m3(iter,1).sensitivity = tmp.OptimSensitivity;
+    m3(iter,1).specificity = tmp.OptimSpecificity;
+    
+    % Dataset undersampling and testing of regression coefficient stability (Sci Rep revision 1: Q2 of R2 and Q1 of R1)
+    if iter == 1
+        m390=regress_undersampled_model3(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f90,sizeXX0m90,sizeXX1f90,sizeXX1m90,adasyn_beta1,adasyn_kDensity1,adasyn_kSMOTE1,adasyn_featuresAreNormalized1);
+        m380=regress_undersampled_model3(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f80,sizeXX0m80,sizeXX1f80,sizeXX1m80,adasyn_beta1,adasyn_kDensity1,adasyn_kSMOTE1,adasyn_featuresAreNormalized1);
+        m370=regress_undersampled_model3(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f70,sizeXX0m70,sizeXX1f70,sizeXX1m70,adasyn_beta1,adasyn_kDensity1,adasyn_kSMOTE1,adasyn_featuresAreNormalized1);
+        m360=regress_undersampled_model3(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f60,sizeXX0m60,sizeXX1f60,sizeXX1m60,adasyn_beta1,adasyn_kDensity1,adasyn_kSMOTE1,adasyn_featuresAreNormalized1);
+        m350=regress_undersampled_model3(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f50,sizeXX0m50,sizeXX1f50,sizeXX1m50,adasyn_beta1,adasyn_kDensity1,adasyn_kSMOTE1,adasyn_featuresAreNormalized1);
+    else
+        m390(iter,1)=regress_undersampled_model3(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f90,sizeXX0m90,sizeXX1f90,sizeXX1m90,adasyn_beta1,adasyn_kDensity1,adasyn_kSMOTE1,adasyn_featuresAreNormalized1);
+        m380(iter,1)=regress_undersampled_model3(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f80,sizeXX0m80,sizeXX1f80,sizeXX1m80,adasyn_beta1,adasyn_kDensity1,adasyn_kSMOTE1,adasyn_featuresAreNormalized1);
+        m370(iter,1)=regress_undersampled_model3(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f70,sizeXX0m70,sizeXX1f70,sizeXX1m70,adasyn_beta1,adasyn_kDensity1,adasyn_kSMOTE1,adasyn_featuresAreNormalized1);
+        m360(iter,1)=regress_undersampled_model3(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f60,sizeXX0m60,sizeXX1f60,sizeXX1m60,adasyn_beta1,adasyn_kDensity1,adasyn_kSMOTE1,adasyn_featuresAreNormalized1);
+        m350(iter,1)=regress_undersampled_model3(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f50,sizeXX0m50,sizeXX1f50,sizeXX1m50,adasyn_beta1,adasyn_kDensity1,adasyn_kSMOTE1,adasyn_featuresAreNormalized1);
+    end
+end
+
+M3(1,1).inmodel = reshape([m3(:,1).inmodel]',size(m3(1,1).inmodel,2),niter_adasyn)';
+M3(1,1).inmodel_unique = unique(M3.inmodel,'rows');
+M3(1,1).inmodel_unique_prob = zeros(size(M3.inmodel_unique,1),1);
+
+for res = 1:size(M3.inmodel_unique,1)
+    for iter = 1:niter_adasyn
+        M3.inmodel_unique_prob(res,1) = M3.inmodel_unique_prob(res,1) + ...
+            double(sum(M3.inmodel_unique(res,:) == M3.inmodel(iter,:)) == size(m3(1,1).inmodel,2));
+    end
+end
+M3(1,1).inmodel_unique_prob = 100*M3.inmodel_unique_prob/niter_adasyn;
+M3(1,1).best = find(M3.inmodel_unique_prob==max(M3.inmodel_unique_prob));
+M3(1,1).pos = sum(M3.inmodel == M3.inmodel_unique(M3.best,:),2) == size(M3.inmodel,2);
+M3(1,1).varid = find(M3.inmodel_unique(M3.best,:)==1);
+b = [m3.b]';
+b = b(M3.pos,M3.varid);
+M3.b(:,1) =  mean(b);
+M3.b(:,2) =  std(b);
+pval = [m3.pval]';
+pval = pval(M3.pos,M3.varid);
+M3.pval = median(pval);
+r = [m3(M3.pos,1).r]';
+M3.r = [mean(r) std(r)];
+M3.p_r = median([m3(M3.pos,1).p_r]);
+R2 = [m3(M3.pos,1).R2]';
+M3.R2 = [mean(R2) std(R2)];
+M3.prob = M3.inmodel_unique_prob(M3.best);
+M3.unique_models = size(M3.inmodel_unique,1);
+th = [m3(M3.pos,1).threshold]';
+M3.threshold = [mean(th) std(th)];
+th = [m3(M3.pos,1).sensitivity]';
+M3.sensitivity = [mean(th) std(th)];
+th = [m3(M3.pos,1).specificity]';
+M3.specificity = [mean(th) std(th)];
+th = arrayfun(@(x) x.stats.rmse,m3); th = th(M3.pos,1);
+M3.rmse = [mean(th) std(th)];
+th = arrayfun(@(x) x.stats.fstat,m3); th = th(M3.pos,1);
+M3.fstat = [mean(th) std(th)];
+
+M390 = get_downsamp_model_info(m390,M3,niter_adasyn);
+M380 = get_downsamp_model_info(m380,M3,niter_adasyn);
+M370 = get_downsamp_model_info(m370,M3,niter_adasyn);
+M360 = get_downsamp_model_info(m360,M3,niter_adasyn);
+M350 = get_downsamp_model_info(m350,M3,niter_adasyn);
+
+% Predicted signal Y_predict
+% Y_predict = sum( repmat(M3.b(:,1)',size(X,1),1).*X(:,M3.varid) ,2); % Predicted signal for record where all data were acquired
+% [model3_r, model3_pr]=corrcoef(Y,Y_predict);
+% model3_R2 = (1 - model3_stats(1,1).SSresid / model3_stats(1,1).SStotal)*100;
+ 
+var_sig=M3.varid;
+
+Yp=sum(X_Wilcox(:,M3.varid).*repmat(M3.b(:,1)',size(X_Wilcox,1),1),2); % Predicted signal for all FS subjects
 p_Yp_W = ranksum(Yp(Y_Wilcox==1),Yp(Y_Wilcox==2)); % Wilcoxon rank-sum test
 [~, p_Yp_T] = ttest2(Yp(Y_Wilcox==1),Yp(Y_Wilcox==2)); % Two-sample t-test
 
 % Sub-grouping of the predicted signal for visualization purposes 
 Yp1=Yp(Y_Wilcox==1);
 Yp2=Yp(Y_Wilcox==2);
-Yp1_mean = median(Yp1);
-Yp2_mean = median(Yp2);
+Yp1_mean = median(Yp1,'omitnan');
+Yp2_mean = median(Yp2,'omitnan');
 Yp1_1=Yp(grp_ps_Wilcox==3);
 Yp1_2=Yp(grp_ps_Wilcox==5);
 Yp2_1=Yp(Y_Wilcox==2 & Y_AtOrder==1);
@@ -258,26 +428,29 @@ seiz_risk=[sts(1,idx-1).OptimThr sts(1,idx-1).OptimSensitivity sts(1,idx-1).Opti
 h(2).fig = figure(2);
 set(h(2).fig,'Position',[50 50 1300 500])
 subplot(1,2,1)
-scatter(data_model3(grp==3,var_sig(1)),data_model3(grp==3,var_sig(2)),850, 'b.')
+scatter3(data_model3(grp==3,var_sig(1)),data_model3(grp==3,var_sig(2)),data_model3(grp==3,var_sig(3)),850, 'b.')
 hold on
-scatter(data_model3(grp==5,var_sig(1)),data_model3(grp==5,var_sig(2)),100, 'b*','LineWidth',2)
-scatter(data_model3(grp==4 & AtOrder==1,var_sig(1)),data_model3(grp==4 & AtOrder==1,var_sig(2)),850, 'r.')
-scatter(data_model3(grp==4 & AtOrder>1,var_sig(1)),data_model3(grp==4 & AtOrder>1,var_sig(2)),100, 'r*','LineWidth',2)
-xxdata = [data_model3(grp==3,var_sig(1)); data_model3(grp==4,var_sig(1)); data_model3(grp==5,var_sig(1))];
-yydata = [data_model3(grp==3,var_sig(2)); data_model3(grp==4,var_sig(2)); data_model3(grp==5,var_sig(2))];
-par = polyfit(xxdata,yydata,1);
+scatter3(data_model3(grp==5,var_sig(1)),data_model3(grp==5,var_sig(2)),data_model3(grp==5,var_sig(3)),100, 'b*','LineWidth',2)
+scatter3(data_model3(grp==4 & AtOrder==1,var_sig(1)),data_model3(grp==4 & AtOrder==1,var_sig(2)),data_model3(grp==4 & AtOrder==1,var_sig(3)),850, 'r.')
+scatter3(data_model3(grp==4 & AtOrder>1,var_sig(1)),data_model3(grp==4 & AtOrder>1,var_sig(2)),data_model3(grp==4 & AtOrder>1,var_sig(3)),100, 'r*','LineWidth',2)
+% xxdata = [data_model3(grp==3,var_sig(1)); data_model3(grp==4,var_sig(1)); data_model3(grp==5,var_sig(1))];
+% yydata = [data_model3(grp==3,var_sig(2)); data_model3(grp==4,var_sig(2)); data_model3(grp==5,var_sig(2))];
+% par = polyfit(xxdata,yydata,1);
 Xlimits = get(gca,'XLim');
 Ylimits = get(gca,'YLim');
-Yvals = par(1).*Xlimits + par(2);
-rr = corrcoef(xxdata,yydata);
-plot(Xlimits,Yvals,'-.','LineWidth',2,'Color',[80 80 80]/255)
+Zlimits = get(gca,'ZLim');
+% Yvals = par(1).*Xlimits + par(2);
+% rr = corrcoef(xxdata,yydata);
+% plot(Xlimits,Yvals,'-.','LineWidth',2,'Color',[80 80 80]/255)
 xlim(Xlimits)
 ylim(Ylimits)
-text(35,118,['r=' num2str(rr(1,2),'%10.3f')],'Fontsize',14,'HorizontalAlignment','left')
+zlim(Zlimits)
+% text(35,118,['r=' num2str(rr(1,2),'%10.3f')],'Fontsize',14,'HorizontalAlignment','left')
 hold off
 grid on
 xlabel([variable_name_model3{1,var_sig(1)} ' [%]'])
 ylabel([variable_name_model3{1,var_sig(2)} ' [g/l]'])
+zlabel(variable_name_model3{1,var_sig(3)})
 legend('non-recurrent seizures','non-rec. complex seizures','recurrent seizures (1^{st} seizure)','recurrent seizures (repeated seizure)','Location','southeast')
 set(gca,'FontSize',14,...
         'LineWidth',2)
@@ -307,15 +480,15 @@ scatter(1*ones(size(Yp1_1))/2,Yp1_1,850, 'b.', 'jitter','on', 'jitterAmount', 0.
 scatter(1*ones(size(Yp1_2))/2,Yp1_2,100, 'b*', 'jitter','on', 'jitterAmount', 0.14,'MarkerEdgeAlpha',0.7,'MarkerFaceAlpha',0.7,'LineWidth',2);
 scatter(2*ones(size(Yp2_1))/2,Yp2_1,850, '.','MarkerEdgeColor',[1 0 0], 'jitter','on', 'jitterAmount', 0.14,'MarkerEdgeAlpha',0.7,'MarkerFaceAlpha',0.7);
 scatter(2*ones(size(Yp2_2))/2,Yp2_2,100, 'r*', 'jitter','on', 'jitterAmount', 0.14,'MarkerEdgeAlpha',0.7,'MarkerFaceAlpha',0.7,'LineWidth',2);
-plot([0.5 1],[2.10 2.10],'k-.','LineWidth',2)
-plot([0.5 0.5],[2.02 2.10],'k-.','LineWidth',2)
-plot([1 1],[2.02 2.10],'k-.','LineWidth',2)
-plot([0.75 0.75],[2.10 2.18],'k-.','LineWidth',2)
+plot([0.5 1],[2.14 2.14],'k-.','LineWidth',2)
+plot([0.5 0.5],[2.08 2.14],'k-.','LineWidth',2)
+plot([1 1],[2.08 2.14],'k-.','LineWidth',2)
+plot([0.75 0.75],[2.14 2.20],'k-.','LineWidth',2)
 text(0.75,2.23,'*','FontSize',20,'HorizontalAlignment','center')
 text(0.77,2.2,['p=' num2str(p_Yp_W,'%10.5f')],'FontSize',14,'HorizontalAlignment','left')
 hold off
 grid on
-ylabel([num2str(model3_b(var_sig(1)),'%10.4f') '*' variable_name_model3{1,var_sig(1)} '+' num2str(model3_b(var_sig(2)),'%10.4f') '*' variable_name_model3{1,var_sig(2)}])
+ylabel({[num2str(M3.b(1,1),'%10.4f') '*' variable_name_model3{1,var_sig(1)} '+' num2str(M3.b(2,1),'%10.4f') '*' variable_name_model3{1,var_sig(2)}]; ['+' num2str(M3.b(3,1),'%10.4f') '*' variable_name_model3{1,var_sig(3)} ]} )
 ylim([0.6 2.3])
 xlim([0.2 1.3])
 legend([H1, H3],{'median value',['thr=' num2str(seiz_risk(1,1),'%10.2f') ';SE=' num2str(seiz_risk(1,2),'%10.1f') '%;SP=' num2str(seiz_risk(1,3),'%10.1f') '%']},'location','southeast')
@@ -343,17 +516,130 @@ X(:,satFePos) = randn(size(X,1),1); % Substitute satFe data with Gausian random 
 % worse specificity. Exlusion satFe from analysis improves model1 specificity.
 % You can comment the previous command line and make the experiment yourself.
 
+% ADASYN model1 (Sci Rep revision 1: Q2 of R1)
+% ADASYN sythetic dataset matchin female sample size with male sample size
+% ADASYN: set up ADASYN parameters and call the function:
+
+featuresf = X(Y==2 & X(:,end)==1,1:end-1);
+featuresm = X(Y==2 & X(:,end)==0,1:end-1);
+labelsf = true([size(featuresf,1) 1]);
+labelsm = false([size(featuresm,1) 1]);
+
+adasyn_features                 = [featuresf; featuresm];
+adasyn_labels                   = [labelsf  ; labelsm  ];
+adasyn_beta                     = [];   %let ADASYN choose default
+adasyn_kDensity                 = [];   %let ADASYN choose default
+adasyn_kSMOTE                   = [];   %let ADASYN choose default
+adasyn_featuresAreNormalized    = false;    %false lets ADASYN handle normalization
+
+% Divide data regarding groups and sex for dataset undersampling and
+% testing regression parameter stability (Sci Rep revision 1: Q2 of R2 and Q1 of R1)
+XX0f = X(Y==0 & X(:,end)==1,:);
+XX0m = X(Y==0 & X(:,end)==0,:);
+XX1f = X(Y==1 & X(:,end)==1,:);
+XX1m = X(Y==1 & X(:,end)==0,:);
+XX2f = X(Y==2 & X(:,end)==1,:);
+XX2m = X(Y==2 & X(:,end)==0,:);
+sizeXX0f = size(XX0f,1); sizeXX0f90 = round(0.9*sizeXX0f);  sizeXX0f80 = round(0.8*sizeXX0f);  sizeXX0f70 = round(0.7*sizeXX0f);  sizeXX0f60 = round(0.6*sizeXX0f);  sizeXX0f50 = round(0.5*sizeXX0f);
+sizeXX0m = size(XX0m,1); sizeXX0m90 = round(0.9*sizeXX0m);  sizeXX0m80 = round(0.8*sizeXX0m);  sizeXX0m70 = round(0.7*sizeXX0m);  sizeXX0m60 = round(0.6*sizeXX0m);  sizeXX0m50 = round(0.5*sizeXX0m);
+sizeXX1f = size(XX1f,1); sizeXX1f90 = round(0.9*sizeXX1f);  sizeXX1f80 = round(0.8*sizeXX1f);  sizeXX1f70 = round(0.7*sizeXX1f);  sizeXX1f60 = round(0.6*sizeXX1f);  sizeXX1f50 = round(0.5*sizeXX1f);
+sizeXX1m = size(XX1m,1); sizeXX1m90 = round(0.9*sizeXX1m);  sizeXX1m80 = round(0.8*sizeXX1m);  sizeXX1m70 = round(0.7*sizeXX1m);  sizeXX1m60 = round(0.6*sizeXX1m);  sizeXX1m50 = round(0.5*sizeXX1m);
+sizeXX2f = size(XX2f,1); sizeXX2f90 = round(0.9*sizeXX2f);  sizeXX2f80 = round(0.8*sizeXX2f);  sizeXX2f70 = round(0.7*sizeXX2f);  sizeXX2f60 = round(0.6*sizeXX2f);  sizeXX2f50 = round(0.5*sizeXX2f);
+sizeXX2m = size(XX2m,1); sizeXX2m90 = round(0.9*sizeXX2m);  sizeXX2m80 = round(0.8*sizeXX2m);  sizeXX2m70 = round(0.7*sizeXX2m);  sizeXX2m60 = round(0.6*sizeXX2m);  sizeXX2m50 = round(0.5*sizeXX2m);
+
+for iter = 1:niter_adasyn
+    % ADASYN (Sci Rep revision 1: Q2 of R1)
+    [adasyn_featuresSyn, adasyn_labelsSyn] = ADASYN(adasyn_features, adasyn_labels, adasyn_beta, adasyn_kDensity, adasyn_kSMOTE, adasyn_featuresAreNormalized);
+    
+    XSyn = [X; [adasyn_featuresSyn, adasyn_labelsSyn]];
+    YSyn = [Y; 2*ones(size(adasyn_labelsSyn))];
+
+    % Step-wise linear regression for model1
+    [m1(iter,1).b,m1(iter,1).se,m1(iter,1).pval,m1(iter,1).inmodel,m1(iter,1).stats,m1(iter,1).nextstep,m1(iter,1).history] = stepwisefit(XSyn,YSyn,'penter',0.05);
+    Y_predict = sum( repmat(m1(iter,1).b(m1(iter,1).inmodel==1)',size(X,1),1).*X(:,m1(iter,1).inmodel==1) ,2); % Predicted signal Y_predict
+    [r, pr]=corrcoef(Y,Y_predict);
+    m1(iter,1).Y_predict = Y_predict;
+    m1(iter,1).r = r(1,2);
+    m1(iter,1).p_r = pr(1,2);
+    m1(iter,1).R2 = (1 - m1(iter,1).stats(1,1).SSresid / m1(iter,1).stats(1,1).SStotal)*100;
+    tmp=estimate_threshold(Y_predict(Y==2),Y_predict(Y==1),variable_name,997,'he');
+    m1(iter,1).threshold = tmp.OptimThr;
+    m1(iter,1).sensitivity = tmp.OptimSensitivity;
+    m1(iter,1).specificity = tmp.OptimSpecificity;
+    
+    % Dataset undersampling and testing of regression coefficient stability (Sci Rep revision 1: Q2 of R2 and Q1 of R1)
+    if iter == 1
+        m190=regress_undersampled_model1(XX0f,XX0m,XX1f,XX1m,XX2f,XX2m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX2f,sizeXX2m,sizeXX0f90,sizeXX0m90,sizeXX1f90,sizeXX1m90,sizeXX2f90,sizeXX2m90,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m180=regress_undersampled_model1(XX0f,XX0m,XX1f,XX1m,XX2f,XX2m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX2f,sizeXX2m,sizeXX0f80,sizeXX0m80,sizeXX1f80,sizeXX1m80,sizeXX2f80,sizeXX2m80,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m170=regress_undersampled_model1(XX0f,XX0m,XX1f,XX1m,XX2f,XX2m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX2f,sizeXX2m,sizeXX0f70,sizeXX0m70,sizeXX1f70,sizeXX1m70,sizeXX2f70,sizeXX2m70,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m160=regress_undersampled_model1(XX0f,XX0m,XX1f,XX1m,XX2f,XX2m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX2f,sizeXX2m,sizeXX0f60,sizeXX0m60,sizeXX1f60,sizeXX1m60,sizeXX2f60,sizeXX2m60,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m150=regress_undersampled_model1(XX0f,XX0m,XX1f,XX1m,XX2f,XX2m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX2f,sizeXX2m,sizeXX0f50,sizeXX0m50,sizeXX1f50,sizeXX1m50,sizeXX2f50,sizeXX2m50,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+    else
+        m190(iter,1)=regress_undersampled_model1(XX0f,XX0m,XX1f,XX1m,XX2f,XX2m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX2f,sizeXX2m,sizeXX0f90,sizeXX0m90,sizeXX1f90,sizeXX1m90,sizeXX2f90,sizeXX2m90,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m180(iter,1)=regress_undersampled_model1(XX0f,XX0m,XX1f,XX1m,XX2f,XX2m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX2f,sizeXX2m,sizeXX0f80,sizeXX0m80,sizeXX1f80,sizeXX1m80,sizeXX2f80,sizeXX2m80,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m170(iter,1)=regress_undersampled_model1(XX0f,XX0m,XX1f,XX1m,XX2f,XX2m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX2f,sizeXX2m,sizeXX0f70,sizeXX0m70,sizeXX1f70,sizeXX1m70,sizeXX2f70,sizeXX2m70,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m160(iter,1)=regress_undersampled_model1(XX0f,XX0m,XX1f,XX1m,XX2f,XX2m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX2f,sizeXX2m,sizeXX0f60,sizeXX0m60,sizeXX1f60,sizeXX1m60,sizeXX2f60,sizeXX2m60,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m150(iter,1)=regress_undersampled_model1(XX0f,XX0m,XX1f,XX1m,XX2f,XX2m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX2f,sizeXX2m,sizeXX0f50,sizeXX0m50,sizeXX1f50,sizeXX1m50,sizeXX2f50,sizeXX2m50,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+    end
+end
+
+M1(1,1).inmodel = reshape([m1(:,1).inmodel]',size(m1(1,1).inmodel,2),niter_adasyn)';
+M1(1,1).inmodel_unique = unique(M1.inmodel,'rows');
+M1(1,1).inmodel_unique_prob = zeros(size(M1.inmodel_unique,1),1);
+
+for res = 1:size(M1.inmodel_unique,1)
+    for iter = 1:niter_adasyn
+        M1.inmodel_unique_prob(res,1) = M1.inmodel_unique_prob(res,1) + ...
+            double(sum(M1.inmodel_unique(res,:) == M1.inmodel(iter,:)) == size(m1(1,1).inmodel,2));
+    end
+end
+M1(1,1).inmodel_unique_prob = 100*M1.inmodel_unique_prob/niter_adasyn;
+M1(1,1).best = find(M1.inmodel_unique_prob==max(M1.inmodel_unique_prob));
+M1(1,1).pos = sum(M1.inmodel == M1.inmodel_unique(M1.best,:),2) == size(M1.inmodel,2);
+M1(1,1).varid = find(M1.inmodel_unique(M1.best,:)==1);
+b = [m1.b]';
+b = b(M1.pos,M1.varid);
+M1.b(:,1) =  mean(b);
+M1.b(:,2) =  std(b);
+pval = [m1.pval]';
+pval = pval(M1.pos,M1.varid);
+M1.pval = median(pval);
+r = [m1(M1.pos,1).r]';
+M1.r = [mean(r) std(r)];
+M1.p_r = median([m1(M1.pos,1).p_r]);
+R2 = [m1(M1.pos,1).R2]';
+M1.R2 = [mean(R2) std(R2)];
+M1.prob = M1.inmodel_unique_prob(M1.best);
+M1.unique_models = size(M1.inmodel_unique,1);
+th = [m1(M1.pos,1).threshold]';
+M1.threshold = [mean(th) std(th)];
+th = [m1(M1.pos,1).sensitivity]';
+M1.sensitivity = [mean(th) std(th)];
+th = [m1(M1.pos,1).specificity]';
+M1.specificity = [mean(th) std(th)];
+th = arrayfun(@(x) x.stats.rmse,m1); th = th(M1.pos,1);
+M1.rmse = [mean(th) std(th)];
+th = arrayfun(@(x) x.stats.fstat,m1); th = th(M1.pos,1);
+M1.fstat = [mean(th) std(th)];
+
+M190 = get_downsamp_model_info(m190,M1,niter_adasyn);
+M180 = get_downsamp_model_info(m180,M1,niter_adasyn);
+M170 = get_downsamp_model_info(m170,M1,niter_adasyn);
+M160 = get_downsamp_model_info(m160,M1,niter_adasyn);
+M150 = get_downsamp_model_info(m150,M1,niter_adasyn);
+
 % Step-wise linear regression for model1
-[model1_b,model1_se,model1_pval,model1_inmodel,model1_stats,model1_nextstep,model1_history] =stepwisefit(X,Y,'penter',0.05);
-Y_predict = sum( repmat(model1_b(model1_inmodel==1)',size(X,1),1).*X(:,model1_inmodel==1) ,2); % Predicted signal Y_predict
+% [model1_b,model1_se,model1_pval,model1_inmodel,model1_stats,model1_nextstep,model1_history] =stepwisefit(X,Y,'penter',0.05);
+Y_predict = sum( repmat(M1.b(:,1)',size(X,1),1).*X(:,M1.varid) ,2); % Predicted signal Y_predict
 Predicted = Y_predict; % Store predicted signal for further analysis
-[model1_r, model1_pr]=corrcoef(Y,Y_predict);
-model1_R2 = (1 - model1_stats(1,1).SSresid / model1_stats(1,1).SStotal)*100;
+% [model1_r, model1_pr]=corrcoef(Y,Y_predict);
+% model1_R2 = (1 - model1_stats(1,1).SSresid / model1_stats(1,1).SStotal)*100;
 
 % Sorted variables based on variable significance to the model
-var_sig=find(model1_inmodel==1);
-[~,I] = sort(model1_pval(var_sig));
+var_sig=M1.varid;
+[~,I] = sort(M1.pval);
 var_sig=var_sig(I);
+model1_b = M1.b(I);
 
 % Sub-grouping of the predicted signal for betweem-group testings and for visualization purposes 
 Yp1=Y_predict(grp_ps==1);
@@ -420,17 +706,17 @@ set(gca,'FontSize',14,...
 
 subplot(1,2,2)
 if size(var_sig,2)<3
-    YLBL1=[num2str(model1_b(var_sig(1)),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
-             '+' num2str(model1_b(var_sig(2)),'%10.3f') '*' variable_name{1,var_sig(2)}];
+    YLBL1=[num2str(model1_b(1),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
+             '+' num2str(model1_b(2),'%10.3f') '*' variable_name{1,var_sig(2)}];
 elseif size(var_sig,2)==3
-    YLBL1=[num2str(model1_b(var_sig(1)),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
-            '+' num2str(model1_b(var_sig(2)),'%10.3f') '*' variable_name{1,var_sig(2)}...
-            num2str(model1_b(var_sig(3)),'%10.3f') '*' variable_name{1,var_sig(3)} ];
+    YLBL1=[num2str(model1_b(1),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
+            '+' num2str(model1_b(2),'%10.3f') '*' variable_name{1,var_sig(2)}...
+            num2str(model1_b(3),'%10.3f') '*' variable_name{1,var_sig(3)} ];
 else
-    YLBL1={[num2str(model1_b(var_sig(1)),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
-            '+' num2str(model1_b(var_sig(2)),'%10.3f') '*' variable_name{1,var_sig(2)}],...
-            ['+' num2str(model1_b(var_sig(3)),'%10.3f') '*' variable_name{1,var_sig(3)} ...
-            '+' num2str(model1_b(var_sig(4)),'%10.3f') '*' variable_name{1,var_sig(4)} ]};
+    YLBL1={[num2str(model1_b(1),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
+            '+' num2str(model1_b(2),'%10.3f') '*' variable_name{1,var_sig(2)}],...
+            ['+' num2str(model1_b(3),'%10.3f') '*' variable_name{1,var_sig(3)} ...
+            '+' num2str(model1_b(4),'%10.3f') '*' variable_name{1,var_sig(4)} ]};
 end
 plot_cat_scatter(Yp1,Yp2,Yp3_1,Yp3_2,Yp4,YLBL1,'southeast',S_risk(1,:))
 
@@ -479,6 +765,7 @@ nonseiz=data(grp==2,varID);
 sts(1,idx)=estimate_threshold(seiz,nonseiz,variable_name,varID,'le');idx=idx+1;
 seiz_risk=[sts(1,idx-1).OptimThr sts(1,idx-1).OptimSensitivity sts(1,idx-1).OptimSpecificity];
 plot_cat_scatter(data(grp==1,varID),data(grp==2,varID),data(grp==3,varID),data(grp==5,varID),data(grp==4,varID),variable_name{1,varID},'northeast',seiz_risk)
+% [Usatfe, ~] = randomize_univariate_separation(data(:,varID),grp,variable_name,varID,'le',female,niter_adasyn);
 
 subplot(3,2,3)
 varID=FePos;
@@ -487,6 +774,7 @@ nonseiz=data(grp==2,varID);
 sts(1,idx)=estimate_threshold(seiz,nonseiz,variable_name,varID,'le');idx=idx+1;
 seiz_risk=[sts(1,idx-1).OptimThr sts(1,idx-1).OptimSensitivity sts(1,idx-1).OptimSpecificity];
 plot_cat_scatter(data(grp==1,varID),data(grp==2,varID),data(grp==3,varID),data(grp==5,varID),data(grp==4,varID),[variable_name{1,varID} ' [\mumol/l]'],' ',seiz_risk)
+% [Ufe, ~] = randomize_univariate_separation(data(:,varID),grp,variable_name,varID,'le',female,niter_adasyn);
 
 subplot(3,2,4)
 varID=find(strcmp(variable_name,'UIBC')==1);
@@ -495,6 +783,7 @@ nonseiz=data(grp==2,varID);
 sts(1,idx)=estimate_threshold(seiz,nonseiz,variable_name,varID,'he');idx=idx+1;
 seiz_risk=[sts(1,idx-1).OptimThr sts(1,idx-1).OptimSensitivity sts(1,idx-1).OptimSpecificity];
 plot_cat_scatter(data(grp==1,varID),data(grp==2,varID),data(grp==3,varID),data(grp==5,varID),data(grp==4,varID),[variable_name{1,varID} ' [\mumol/l]' ],' ',seiz_risk)
+% [Uuibc, ~] = randomize_univariate_separation(data(:,varID),grp,variable_name,varID,'he',female,niter_adasyn);
 
 subplot(3,2,5)
 varID=find(strcmp(variable_name,'Height')==1);
@@ -550,7 +839,6 @@ axis off
 
 print(fullfile(save_path,'fig1'), '-dpng', '-r300')
 pause(0.2)
-
 %% Multivariate analysis: Model2 fitting
 ps=~isnan(sum(data,2)); % Positions where all data are recorded
 X=data(ps,1:end); % Matrix X of all recorded data
@@ -566,17 +854,127 @@ grp_ps2(grp_ps==1)=[]; % Group categories on positions where all data are record
 X(Y==0,:)=[]; % Matrix X of all recorded data without data of afebrille healthy controls
 Y(Y==0)=[]; Y=Y-1; % Y signal without afebrille healthy controls
 
+
+% ADASYN model2 (Sci Rep revision 1: Q2 of R1)
+% ADASYN sythetic dataset matchin female sample size with male sample size
+% ADASYN: set up ADASYN parameters and call the function:
+
+featuresf = X(Y==1 & X(:,end)==1,1:end-1);
+featuresm = X(Y==1 & X(:,end)==0,1:end-1);
+labelsf = true([size(featuresf,1) 1]);
+labelsm = false([size(featuresm,1) 1]);
+
+adasyn_features                 = [featuresf; featuresm];
+adasyn_labels                   = [labelsf  ; labelsm  ];
+adasyn_beta                     = [];   %let ADASYN choose default
+adasyn_kDensity                 = [];   %let ADASYN choose default
+adasyn_kSMOTE                   = [];   %let ADASYN choose default
+adasyn_featuresAreNormalized    = false;    %false lets ADASYN handle normalization
+
+% Divide data regarding groups and sex for dataset undersampling and
+% testing regression parameter stability (Sci Rep revision 1: Q2 of R2 and Q1 of R1)
+XX0f = X(Y==0 & X(:,end)==1,:);
+XX0m = X(Y==0 & X(:,end)==0,:);
+XX1f = X(Y==1 & X(:,end)==1,:);
+XX1m = X(Y==1 & X(:,end)==0,:);
+sizeXX0f = size(XX0f,1); sizeXX0f90 = round(0.9*sizeXX0f);  sizeXX0f80 = round(0.8*sizeXX0f);  sizeXX0f70 = round(0.7*sizeXX0f);  sizeXX0f60 = round(0.6*sizeXX0f);  sizeXX0f50 = round(0.5*sizeXX0f);
+sizeXX0m = size(XX0m,1); sizeXX0m90 = round(0.9*sizeXX0m);  sizeXX0m80 = round(0.8*sizeXX0m);  sizeXX0m70 = round(0.7*sizeXX0m);  sizeXX0m60 = round(0.6*sizeXX0m);  sizeXX0m50 = round(0.5*sizeXX0m);
+sizeXX1f = size(XX1f,1); sizeXX1f90 = round(0.9*sizeXX1f);  sizeXX1f80 = round(0.8*sizeXX1f);  sizeXX1f70 = round(0.7*sizeXX1f);  sizeXX1f60 = round(0.6*sizeXX1f);  sizeXX1f50 = round(0.5*sizeXX1f);
+sizeXX1m = size(XX1m,1); sizeXX1m90 = round(0.9*sizeXX1m);  sizeXX1m80 = round(0.8*sizeXX1m);  sizeXX1m70 = round(0.7*sizeXX1m);  sizeXX1m60 = round(0.6*sizeXX1m);  sizeXX1m50 = round(0.5*sizeXX1m);
+
+for iter = 1:niter_adasyn
+    % ADASYN
+    [adasyn_featuresSyn, adasyn_labelsSyn] = ADASYN(adasyn_features, adasyn_labels, adasyn_beta, adasyn_kDensity, adasyn_kSMOTE, adasyn_featuresAreNormalized);
+
+    XSyn = [X; [adasyn_featuresSyn, adasyn_labelsSyn]];
+    YSyn = [Y; ones(size(adasyn_labelsSyn))];
+
+    % Step-wise linear regression for model2
+    [m2(iter,1).b,m2(iter,1).se,m2(iter,1).pval,m2(iter,1).inmodel,m2(iter,1).stats,m2(iter,1).nextstep,m2(iter,1).history] = stepwisefit(XSyn,YSyn,'penter',0.05);
+    Y_predict = sum( repmat(m2(iter,1).b(m2(iter,1).inmodel==1)',size(X,1),1).*X(:,m2(iter,1).inmodel==1) ,2); % Predicted signal Y_predict
+    [r, pr]=corrcoef(Y,Y_predict);
+    m2(iter,1).Y_predict = Y_predict;
+    m2(iter,1).r = r(1,2);
+    m2(iter,1).p_r = pr(1,2);
+    m2(iter,1).R2 = (1 - m2(iter,1).stats(1,1).SSresid / m2(iter,1).stats(1,1).SStotal)*100;
+    tmp=estimate_threshold(Y_predict(Y==1),Y_predict(Y==0),variable_name,998,'he');
+    m2(iter,1).threshold = tmp.OptimThr;
+    m2(iter,1).sensitivity = tmp.OptimSensitivity;
+    m2(iter,1).specificity = tmp.OptimSpecificity;
+    
+    % Dataset undersampling and testing of regression coefficient stability (Sci Rep revision 1: Q2 of R2 and Q1 of R1)
+    if iter == 1
+        m290=regress_undersampled_model2(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f90,sizeXX0m90,sizeXX1f90,sizeXX1m90,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m280=regress_undersampled_model2(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f80,sizeXX0m80,sizeXX1f80,sizeXX1m80,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m270=regress_undersampled_model2(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f70,sizeXX0m70,sizeXX1f70,sizeXX1m70,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m260=regress_undersampled_model2(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f60,sizeXX0m60,sizeXX1f60,sizeXX1m60,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m250=regress_undersampled_model2(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f50,sizeXX0m50,sizeXX1f50,sizeXX1m50,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+    else
+        m290(iter,1)=regress_undersampled_model2(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f90,sizeXX0m90,sizeXX1f90,sizeXX1m90,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m280(iter,1)=regress_undersampled_model2(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f80,sizeXX0m80,sizeXX1f80,sizeXX1m80,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m270(iter,1)=regress_undersampled_model2(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f70,sizeXX0m70,sizeXX1f70,sizeXX1m70,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m260(iter,1)=regress_undersampled_model2(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f60,sizeXX0m60,sizeXX1f60,sizeXX1m60,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+        m250(iter,1)=regress_undersampled_model2(XX0f,XX0m,XX1f,XX1m,sizeXX0f,sizeXX0m,sizeXX1f,sizeXX1m,sizeXX0f50,sizeXX0m50,sizeXX1f50,sizeXX1m50,adasyn_beta,adasyn_kDensity,adasyn_kSMOTE,adasyn_featuresAreNormalized);
+    end
+end
+
+M2(1,1).inmodel = reshape([m2(:,1).inmodel]',size(m2(1,1).inmodel,2),niter_adasyn)';
+M2(1,1).inmodel_unique = unique(M2.inmodel,'rows');
+M2(1,1).inmodel_unique_prob = zeros(size(M2.inmodel_unique,1),1);
+
+for res = 1:size(M2.inmodel_unique,1)
+    for iter = 1:niter_adasyn
+        M2.inmodel_unique_prob(res,1) = M2.inmodel_unique_prob(res,1) + ...
+            double(sum(M2.inmodel_unique(res,:) == M2.inmodel(iter,:)) == size(m2(1,1).inmodel,2));
+    end
+end
+M2(1,1).inmodel_unique_prob = 100*M2.inmodel_unique_prob/niter_adasyn;
+M2(1,1).best = find(M2.inmodel_unique_prob==max(M2.inmodel_unique_prob));
+M2(1,1).pos = sum(M2.inmodel == M2.inmodel_unique(M2.best,:),2) == size(M2.inmodel,2);
+M2(1,1).varid = find(M2.inmodel_unique(M2.best,:)==1);
+b = [m2.b]';
+b = b(M2.pos,M2.varid);
+M2.b(:,1) =  mean(b);
+M2.b(:,2) =  std(b);
+pval = [m2.pval]';
+pval = pval(M2.pos,M2.varid);
+M2.pval = median(pval);
+r = [m2(M2.pos,1).r]';
+M2.r = [mean(r) std(r)];
+M2.p_r = median([m2(M2.pos,1).p_r]);
+R2 = [m2(M2.pos,1).R2]';
+M2.R2 = [mean(R2) std(R2)];
+M2.prob = M2.inmodel_unique_prob(M2.best);
+M2.unique_models = size(M2.inmodel_unique,1);
+th = [m2(M2.pos,1).threshold]';
+M2.threshold = [mean(th) std(th)];
+th = [m2(M2.pos,1).sensitivity]';
+M2.sensitivity = [mean(th) std(th)];
+th = [m2(M2.pos,1).specificity]';
+M2.specificity = [mean(th) std(th)];
+th = arrayfun(@(x) x.stats.rmse,m2); th = th(M2.pos,1);
+M2.rmse = [mean(th) std(th)];
+th = arrayfun(@(x) x.stats.fstat,m2); th = th(M2.pos,1);
+M2.fstat = [mean(th) std(th)];
+
+M290 = get_downsamp_model_info(m290,M2,niter_adasyn);
+M280 = get_downsamp_model_info(m280,M2,niter_adasyn);
+M270 = get_downsamp_model_info(m270,M2,niter_adasyn);
+M260 = get_downsamp_model_info(m260,M2,niter_adasyn);
+M250 = get_downsamp_model_info(m250,M2,niter_adasyn);
+
 % Step-wise linear regression for model2
-[model2_b,model2_se,model2_pval,model2_inmodel,model2_stats,model2_nextstep,model2_history] =stepwisefit(X,Y,'penter',0.05);
-Y_predict = sum( repmat(model2_b(model2_inmodel==1)',size(X2,1),1).*X2(:,model2_inmodel==1) ,2);
+% [model2_b,model2_se,model2_pval,model2_inmodel,model2_stats,model2_nextstep,model2_history] =stepwisefit(X,Y,'penter',0.05);
+Y_predict = sum( repmat(M2.b(:,1)',size(X2,1),1).*X2(:,M2.varid) ,2);
 Predicted(:,2) = Y_predict;
-[model2_r, model2_pr]=corrcoef(Y,Y_predict(grp_ps~=1));
-model2_R2 = (1 - model2_stats(1,1).SSresid / model2_stats(1,1).SStotal)*100;
+% [model2_r, model2_pr]=corrcoef(Y,Y_predict(grp_ps~=1));
+% model2_R2 = (1 - model2_stats(1,1).SSresid / model2_stats(1,1).SStotal)*100;
 
 % Sorted variables based on variable significance to the model
-var_sig=find(model2_inmodel==1);
-[~,I] = sort(model2_pval(var_sig));
+var_sig=M2.varid;
+[~,I] = sort(M2.pval);
 var_sig=var_sig(I);
+model2_b = M2.b(I);
 
 % Sub-grouping of the predicted signal for betweem-group testings and for visualization purposes 
 Yp1=Y_predict(grp_ps==1);
@@ -616,30 +1014,30 @@ S_risk(2,:)=[sts(1,idx-1).OptimThr sts(1,idx-1).OptimSensitivity sts(1,idx-1).Op
 h(5).fig = figure(5);
 set(h(5).fig,'Position',[50 50 1300 500])
 subplot(5,2,[1 3 5 7])
-scatter3(data(grp==2,var_sig(1)),data(grp==2,var_sig(2)),data(grp==2,var_sig(3)),850, 'g.')
+scatter3(data(grp==2,var_sig(1)),data(grp==2,var_sig(3)),data(grp==2,var_sig(2)),850, 'g.')
 hold on
-scatter3(data(grp==1,var_sig(1)),data(grp==1,var_sig(2)),data(grp==1,var_sig(3)),850, 'y.')
-scatter3(data(grp==3,var_sig(1)),data(grp==3,var_sig(2)),data(grp==3,var_sig(3)),850, 'b.')
-scatter3(data(grp==5,var_sig(1)),data(grp==5,var_sig(2)),data(grp==5,var_sig(3)),100, 'b*','LineWidth',2)
-scatter3(data(grp==4,var_sig(1)),data(grp==4,var_sig(2)),data(grp==4,var_sig(3)),850, 'r.')
+scatter3(data(grp==1,var_sig(1)),data(grp==1,var_sig(3)),data(grp==1,var_sig(2)),850, 'y.')
+scatter3(data(grp==3,var_sig(1)),data(grp==3,var_sig(3)),data(grp==3,var_sig(2)),850, 'b.')
+scatter3(data(grp==5,var_sig(1)),data(grp==5,var_sig(3)),data(grp==5,var_sig(2)),100, 'b*','LineWidth',2)
+scatter3(data(grp==4,var_sig(1)),data(grp==4,var_sig(3)),data(grp==4,var_sig(2)),850, 'r.')
 hold off
 grid on
 xlabel(variable_name{1,var_sig(1)})
-ylabel([variable_name{1,var_sig(2)} ' [\mumol/l]'])
-zlabel([variable_name{1,var_sig(3)} ' [%]'])
+ylabel([variable_name{1,var_sig(3)} ' [\mumol/l]'])
+zlabel([variable_name{1,var_sig(2)} ' [%]'])
 set(gca,'FontSize',14,...
         'LineWidth',2)
 
 subplot(1,2,2)
 if size(var_sig,2)==3
-    YLBL2=[num2str(model2_b(var_sig(1)),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
-            num2str(model2_b(var_sig(2)),'%10.3f') '*' variable_name{1,var_sig(2)}...
-            '+' num2str(model2_b(var_sig(3)),'%10.3f') '*' variable_name{1,var_sig(3)} ];
+    YLBL2=[num2str(model2_b(1),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
+            num2str(model2_b(2),'%10.3f') '*' variable_name{1,var_sig(2)}...
+            '+' num2str(model2_b(3),'%10.3f') '*' variable_name{1,var_sig(3)} ];
 else
-    YLBL2={[num2str(model2_b(var_sig(1)),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
-        '+' num2str(model2_b(var_sig(2)),'%10.3f') '*' variable_name{1,var_sig(2)}] ...
-        ['+' num2str(model2_b(var_sig(3)),'%10.3f') '*' variable_name{1,var_sig(3)} ...
-        num2str(model2_b(var_sig(4)),'%10.3f') '*' variable_name{1,var_sig(4)} ]};
+    YLBL2={[num2str(model2_b(1),'%10.3f') '*' variable_name{1,var_sig(1)}  ...
+        '+' num2str(model2_b(2),'%10.3f') '*' variable_name{1,var_sig(2)}] ...
+        ['+' num2str(model2_b(3),'%10.3f') '*' variable_name{1,var_sig(3)} ...
+        num2str(model2_b(4),'%10.3f') '*' variable_name{1,var_sig(4)} ]};
 end
 plot_cat_scatter(Yp1,Yp2,Yp3_1,Yp3_2,Yp4,YLBL2,'southeast',S_risk(2,:))
 
@@ -733,7 +1131,7 @@ H2=scatter(Predicted(grp_ps==2,1),Predicted(grp_ps==2,2),850, 'g.','MarkerEdgeAl
 H3=scatter(Predicted(grp_ps==3,1),Predicted(grp_ps==3,2),850, 'b.','MarkerEdgeAlpha',0.5);
 H4=scatter(Predicted(grp_ps==5,1),Predicted(grp_ps==5,2),100, 'b*','MarkerEdgeAlpha',0.5,'LineWidth',2);
 H5=scatter(Predicted(grp_ps==4,1),Predicted(grp_ps==4,2),850, 'r.','MarkerEdgeAlpha',0.5);
-H7=plot([-1000 -1000],[-1000 -1000],'c-.','LineWidth',2);
+% H7=plot([-1000 -1000],[-1000 -1000],'c-.','LineWidth',2);
 hold off
 grid on
 axis([ 1.02*min(Predicted(:,1)) fig6xmax 1.1*min(Predicted(:,2)) fig6ymax ])
@@ -753,8 +1151,8 @@ scatter(Predicted(grp_ps==2,1),Predicted(grp_ps==2,2),850, 'g.','MarkerEdgeAlpha
 scatter(Predicted(grp_ps==3,1),Predicted(grp_ps==3,2),850, 'b.','MarkerEdgeAlpha',0.5)
 scatter(Predicted(grp_ps==5,1),Predicted(grp_ps==5,2),100, 'b*','MarkerEdgeAlpha',0.5,'LineWidth',2)
 scatter(Predicted(grp_ps==4,1),Predicted(grp_ps==4,2),850, 'r.','MarkerEdgeAlpha',0.5)
-text(0.7,0.18,'Bi-linear classifier:','FontSize',12)
-text(0.7,0.13,['SE=' num2str(S_risk(3,2),'%10.1f') '%; SP=' num2str(S_risk(3,3),'%10.1f') '%'],'FontSize',12)
+text(0.75,0.18,'Bi-linear classifier:','FontSize',12)
+text(0.75,0.13,['SE=' num2str(S_risk(3,2),'%10.1f') '%; SP=' num2str(S_risk(3,3),'%10.1f') '%'],'FontSize',12)
 hold off
 grid on
 axis([ fig6xmin_zoom fig6xmax 0 fig6ymax ])
@@ -993,4 +1391,142 @@ for ind = 1:size(data,2)
     [~, tblsex2{ind+1,6}] = ttest2(sx34m,sx34f);
     
     tblsex2{ind+1,1} = variable_name{1,ind};
+end
+%% Build table of model sensitivity to dataset downsampling
+tblsampl{1,2} = 'Dataset size';
+tblsampl{1,3} = '100%'; tblsampl{1,5} = '90%';  tblsampl{1,7} = '80%'; tblsampl{1,9} = '70%'; tblsampl{1,11} = '60%'; tblsampl{1,13} = '50%';
+tblsampl{2,3} = 'Mean';tblsampl{2,4} = 'STD'; tblsampl{2,5} = 'Mean';tblsampl{2,6} = 'STD'; tblsampl{2,7} = 'Mean';tblsampl{2,8} = 'STD'; tblsampl{2,9} = 'Mean';tblsampl{2,10} = 'STD'; tblsampl{2,11} = 'Mean';tblsampl{2,12} = 'STD'; tblsampl{2,13} = 'Mean';tblsampl{2,14} = 'STD';
+
+tblsampl{3,1} = 'Model1';
+tblsampl{3,2} = 'Model detection rate [%]';
+tblsampl{3,3} = M1.prob; tblsampl{3,5} = M190.prob;  tblsampl{3,7} = M180.prob;  tblsampl{3,9} = M170.prob;  tblsampl{3,11} = M160.prob;   tblsampl{3,13} = M150.prob;
+tblsampl{4,2} = 'Total number of identified models';
+tblsampl{4,3} = M1.unique_models; tblsampl{4,5} = M190.unique_models;  tblsampl{4,7} = M180.unique_models;  tblsampl{4,9} = M170.unique_models;  tblsampl{4,11} = M160.unique_models;   tblsampl{4,13} = M150.unique_models;
+for mdx1 = 1:size(M1.varid,2)
+    tblsampl{4+mdx1,2} = [variable_name{1,M1.varid(mdx1)} ' regression coefficient'];
+    b = [M1.b(mdx1,:) M190.b(mdx1,:) M180.b(mdx1,:) M170.b(mdx1,:) M160.b(mdx1,:) M150.b(mdx1,:)];
+    for pos=1:size(b,2)
+        tblsampl{4+mdx1,2+pos} = b(pos);
+    end
+end
+tblsampl{4+mdx1+1,2} = 'F-statistics';
+tblsampl{4+mdx1+2,2} = 'Root mean square error';
+tblsampl{4+mdx1+3,2} = 'Explained variance R^2 [%]';
+tblsampl{4+mdx1+4,2} = 'Pearson correlation (y vs y_predicted)';
+tblsampl{4+mdx1+5,2} = 'Non-seizure/seizure separating threshold';
+tblsampl{4+mdx1+6,2} = 'Training: sensitivity';
+tblsampl{4+mdx1+7,2} = 'Training: specificity';
+tblsampl{4+mdx1+8,2} = 'Testing: sensitivity';
+tblsampl{4+mdx1+9,2} = 'Testing: specificity';
+fstat = [M1.fstat M190.fstat M180.fstat M170.fstat M160.fstat M150.fstat];
+rmse = [M1.rmse M190.rmse M180.rmse M170.rmse M160.rmse M150.rmse];
+testSE = [NaN NaN M190.testSE M180.testSE M170.testSE M160.testSE M150.testSE];
+testSP = [NaN NaN M190.testSP M180.testSP M170.testSP M160.testSP M150.testSP];
+R2 = [M1.R2 M190.R2 M180.R2 M170.R2 M160.R2 M150.R2];
+r = [M1.r M190.r M180.r M170.r M160.r M150.r];
+th = [M1.threshold M190.threshold M180.threshold M170.threshold M160.threshold M150.threshold];
+sensitivity = [M1.sensitivity M190.sensitivity M180.sensitivity M170.sensitivity M160.sensitivity M150.sensitivity];
+specificity = [M1.specificity M190.specificity M180.specificity M170.specificity M160.specificity M150.specificity];
+for pos=1:size(R2,2)
+    tblsampl{4+mdx1+1,2+pos} = fstat(pos);
+    tblsampl{4+mdx1+2,2+pos} = rmse(pos);
+    tblsampl{4+mdx1+3,2+pos} = R2(pos);
+    tblsampl{4+mdx1+4,2+pos} = r(pos);
+    tblsampl{4+mdx1+5,2+pos} = th(pos);
+    tblsampl{4+mdx1+6,2+pos} = sensitivity(pos);
+    tblsampl{4+mdx1+7,2+pos} = specificity(pos);
+    if ~isnan(testSE(pos))
+        tblsampl{4+mdx1+8,2+pos} = testSE(pos);
+        tblsampl{4+mdx1+9,2+pos} = testSP(pos);
+    end
+end
+
+
+tblsampl{4+mdx1+10,1} = 'Model2';
+tblsampl{4+mdx1+10,2} = 'Model detection rate [%]';
+tblsampl{4+mdx1+10,3} = M2.prob; tblsampl{4+mdx1+10,5} = M290.prob;  tblsampl{4+mdx1+10,7} = M280.prob;  tblsampl{4+mdx1+10,9} = M270.prob;  tblsampl{4+mdx1+10,11} = M260.prob;   tblsampl{4+mdx1+10,13} = M250.prob;
+tblsampl{4+mdx1+11,2} = 'Total number of identified models';
+tblsampl{4+mdx1+11,3} = M2.unique_models; tblsampl{4+mdx1+11,5} = M290.unique_models; tblsampl{4+mdx1+11,7} = M280.unique_models; tblsampl{4+mdx1+11,9} = M270.unique_models;  tblsampl{4+mdx1+11,11} = M260.unique_models;   tblsampl{4+mdx1+11,13} = M250.unique_models;
+for mdx2 = 1:size(M2.varid,2)
+    tblsampl{4+mdx1+11+mdx2,2} = [variable_name{1,M2.varid(mdx2)} ' regression coefficient'];
+    b = [M2.b(mdx2,:) M290.b(mdx2,:) M280.b(mdx2,:) M270.b(mdx2,:) M260.b(mdx2,:) M250.b(mdx2,:)];
+    for pos=1:size(b,2)
+        tblsampl{4+mdx1+11+mdx2,2+pos} = b(pos);
+    end
+end
+tblsampl{4+mdx1+11+mdx2+1,2} = 'F-statistics';
+tblsampl{4+mdx1+11+mdx2+2,2} = 'Root mean square error';
+tblsampl{4+mdx1+11+mdx2+3,2} = 'Explained variance R^2 [%]';
+tblsampl{4+mdx1+11+mdx2+4,2} = 'Pearson correlation (y vs y_predicted)';
+tblsampl{4+mdx1+11+mdx2+5,2} = 'Non-seizure/seizure separating threshold';
+tblsampl{4+mdx1+11+mdx2+6,2} = 'Training: sensitivity';
+tblsampl{4+mdx1+11+mdx2+7,2} = 'Training: specificity';
+tblsampl{4+mdx1+11+mdx2+8,2} = 'Testing: sensitivity';
+tblsampl{4+mdx1+11+mdx2+9,2} = 'Testing: specificity';
+fstat = [M2.fstat M290.fstat M280.fstat M270.fstat M260.fstat M250.fstat];
+rmse = [M2.rmse M290.rmse M280.rmse M270.rmse M260.rmse M250.rmse];
+testSE = [NaN NaN M290.testSE M280.testSE M270.testSE M260.testSE M250.testSE];
+testSP = [NaN NaN M290.testSP M280.testSP M270.testSP M260.testSP M250.testSP];
+R2 = [M2.R2 M290.R2 M280.R2 M270.R2 M260.R2 M250.R2];
+r = [M2.r M290.r M280.r M270.r M260.r M250.r];
+th = [M2.threshold M290.threshold M280.threshold M270.threshold M260.threshold M250.threshold];
+sensitivity = [M2.sensitivity M290.sensitivity M280.sensitivity M270.sensitivity M260.sensitivity M250.sensitivity];
+specificity = [M2.specificity M290.specificity M280.specificity M270.specificity M260.specificity M250.specificity];
+for pos=1:size(R2,2)
+    tblsampl{4+mdx1+11+mdx2+1,2+pos} = fstat(pos);
+    tblsampl{4+mdx1+11+mdx2+2,2+pos} = rmse(pos);
+    tblsampl{4+mdx1+11+mdx2+3,2+pos} = R2(pos);
+    tblsampl{4+mdx1+11+mdx2+4,2+pos} = r(pos);
+    tblsampl{4+mdx1+11+mdx2+5,2+pos} = th(pos);
+    tblsampl{4+mdx1+11+mdx2+6,2+pos} = sensitivity(pos);
+    tblsampl{4+mdx1+11+mdx2+7,2+pos} = specificity(pos);
+    if ~isnan(testSE(pos))
+        tblsampl{4+mdx1+11+mdx2+8,2+pos} = testSE(pos);
+        tblsampl{4+mdx1+11+mdx2+9,2+pos} = testSP(pos);
+    end
+end
+
+
+tblsampl{4+mdx1+11+mdx2+10,1} = 'Model3';
+tblsampl{4+mdx1+11+mdx2+10,2} = 'Model detection rate [%]';
+tblsampl{4+mdx1+11+mdx2+10,3} = M3.prob; tblsampl{4+mdx1+11+mdx2+10,5} = M390.prob;  tblsampl{4+mdx1+11+mdx2+10,7} = M380.prob;  tblsampl{4+mdx1+11+mdx2+10,9} = M370.prob;  tblsampl{4+mdx1+11+mdx2+10,11} = M360.prob;   tblsampl{4+mdx1+11+mdx2+10,13} = M350.prob;
+tblsampl{4+mdx1+11+mdx2+11,2} = 'Total number of identified models';
+tblsampl{4+mdx1+11+mdx2+11,3} = M3.unique_models; tblsampl{4+mdx1+11+mdx2+11,5} = M390.unique_models;  tblsampl{4+mdx1+11+mdx2+11,7} = M380.unique_models;  tblsampl{4+mdx1+11+mdx2+11,9} = M370.unique_models;  tblsampl{4+mdx1+11+mdx2+11,11} = M360.unique_models;   tblsampl{4+mdx1+11+mdx2+11,13} = M350.unique_models;
+for mdx3 = 1:size(M3.varid,2)
+    tblsampl{4+mdx1+11+mdx2+11+mdx3,2} = [variable_name{1,M3.varid(mdx3)} ' regression coefficient'];
+    b = [M3.b(mdx3,:) M390.b(mdx3,:) M380.b(mdx3,:) M370.b(mdx3,:) M360.b(mdx3,:) M350.b(mdx3,:)];
+    for pos=1:size(b,2)
+        tblsampl{4+mdx1+11+mdx2+11+mdx3,2+pos} = b(pos);
+    end
+end
+tblsampl{4+mdx1+11+mdx2+11+mdx3+1,2} = 'F-statistics';
+tblsampl{4+mdx1+11+mdx2+11+mdx3+2,2} = 'Root mean square error';
+tblsampl{4+mdx1+11+mdx2+11+mdx3+3,2} = 'Explained variance R^2 [%]';
+tblsampl{4+mdx1+11+mdx2+11+mdx3+4,2} = 'Pearson correlation (y vs y_predicted)';
+tblsampl{4+mdx1+11+mdx2+11+mdx3+5,2} = 'Non-recurrent/recurrent seizure separating threshold';
+tblsampl{4+mdx1+11+mdx2+11+mdx3+6,2} = 'Training: sensitivity';
+tblsampl{4+mdx1+11+mdx2+11+mdx3+7,2} = 'Training: specificity';
+tblsampl{4+mdx1+11+mdx2+11+mdx3+8,2} = 'Testing: sensitivity';
+tblsampl{4+mdx1+11+mdx2+11+mdx3+9,2} = 'Testing: specificity';
+fstat = [M3.fstat M390.fstat M380.fstat M370.fstat M360.fstat M350.fstat];
+rmse = [M3.rmse M390.rmse M380.rmse M370.rmse M360.rmse M350.rmse];
+testSE = [NaN NaN M390.testSE M380.testSE M370.testSE M360.testSE M350.testSE];
+testSP = [NaN NaN M390.testSP M380.testSP M370.testSP M360.testSP M350.testSP];
+R2 = [M3.R2 M390.R2 M380.R2 M370.R2 M360.R2 M350.R2];
+r = [M3.r M390.r M380.r M370.r M360.r M350.r];
+th = [M3.threshold M390.threshold M380.threshold M370.threshold M360.threshold M350.threshold];
+sensitivity = [M3.sensitivity M390.sensitivity M380.sensitivity M370.sensitivity M360.sensitivity M350.sensitivity];
+specificity = [M3.specificity M390.specificity M380.specificity M370.specificity M360.specificity M350.specificity];
+for pos=1:size(R2,2)
+    tblsampl{4+mdx1+11+mdx2+11+mdx3+1,2+pos} = fstat(pos);
+    tblsampl{4+mdx1+11+mdx2+11+mdx3+2,2+pos} = rmse(pos);
+    tblsampl{4+mdx1+11+mdx2+11+mdx3+3,2+pos} = R2(pos);
+    tblsampl{4+mdx1+11+mdx2+11+mdx3+4,2+pos} = r(pos);
+    tblsampl{4+mdx1+11+mdx2+11+mdx3+5,2+pos} = th(pos);
+    tblsampl{4+mdx1+11+mdx2+11+mdx3+6,2+pos} = sensitivity(pos);
+    tblsampl{4+mdx1+11+mdx2+11+mdx3+7,2+pos} = specificity(pos);
+    if ~isnan(testSE(pos))
+        tblsampl{4+mdx1+11+mdx2+11+mdx3+8,2+pos} = testSE(pos);
+        tblsampl{4+mdx1+11+mdx2+11+mdx3+9,2+pos} = testSP(pos);
+    end
 end
