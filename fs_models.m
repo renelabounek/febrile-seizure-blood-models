@@ -229,8 +229,8 @@ thrfwe=thr_p_uncorr/(size(pW,1)*size(pW,2));
 
 %% Test difference between FS and RFS groups in electrolytes and vitD
 fsdata = [mch sodium vitD];
-rfsdata = fsdata(grp == 4 & AtOrder > 1,:);
-fsdata = fsdata(grp == 4 & AtOrder == 1,:);
+rfsdata = fsdata(grp == 4,:);
+fsdata = fsdata(grp == 3 | grp == 5,:);
 
 fsdata_stat = zeros(size(fsdata,2),3);
 rfsdata_stat = zeros(size(fsdata,2),3);
