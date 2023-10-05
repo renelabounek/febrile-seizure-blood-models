@@ -7,15 +7,15 @@
 
 ## Install & Execute
 
-1. Download or clone the project directory [febrile-seizure-blood-models](https://github.com/renelabounek/febrile-seizure-blood-models)
-2. Open MATLAB in the [febrile-seizure-blood-models](https://github.com/renelabounek/febrile-seizure-blood-models) directory or add the [febrile-seizure-blood-models](https://github.com/renelabounek/febrile-seizure-blood-models) directory into the path (e.g. [addpath](https://www.mathworks.com/help/matlab/ref/addpath.html) command)
+1. Download or clone the project directory [febrile-seizure-blood-models](https://github.com/umn-milab/febrile-seizure-blood-models)
+2. Open MATLAB in the [febrile-seizure-blood-models](https://github.com/umn-milab/febrile-seizure-blood-models) directory or add the [febrile-seizure-blood-models](https://github.com/umn-milab/febrile-seizure-blood-models) directory into the path (e.g. [addpath](https://www.mathworks.com/help/matlab/ref/addpath.html) command)
 3. Open fs_models.m script and regarding your HDD set properly save_path and xls_file variables (directory save_path  and file xls_file need to exist on your HDD)
 4. Execute fs_models script
-5. [Submit issue if something goes wrong](https://github.com/renelabounek/febrile-seizure-blood-models/issues)
+5. [Submit issue if something goes wrong](https://github.com/umn-milab/febrile-seizure-blood-models/issues)
 
 ## Please, cite as:
 
-Papez Jan, Labounek Rene, Jabandziev Petr, Ceska Katarina, Slaba Katerina, Oslejskova Hana, Aulicka Stefania, Nestrasil Igor (2023). [Multivariate models for the prediction of febrile seizure risk and recurrence: a prospective case-control study](https://assets.researchsquare.com/files/rs-2606721/v1/c6362c7b-60d6-460f-8ad1-e79fcc6ef23b.pdf?c=1677167779)
+Papez Jan, Labounek Rene, Jabandziev Petr, Ceska Katarina, Slaba Katerina, Oslejskova Hana, Aulicka Stefania, Nestrasil Igor (2023). Multivariate linear mixture models for the prediction of febrile seizure risk and recurrence: a prospective case–control study, *Scientific Reports*.
 
 ## Copyright
 
